@@ -134,7 +134,7 @@ function estimate(g, sum, nA, nH) {
   }
   const picks = [];
   const hs = homeSpread(g, o);
-  if (margin !== null && hs !== null) {
+  if (margin !== null && hs !== null && g.league !== 'nhl') {
     const diff = margin + hs; // > 0 means home beats the number
     const pct = clamp(50 + Math.abs(diff) * L.cover, 50, 66);
     const homeSide = diff > 0;
@@ -366,7 +366,7 @@ function gameCard(g) {
     ${when}
     ${live && g.lastPlay ? `<div class="lp ${S.flash.has(g.id) ? 'flash' : ''}"><b>Last play</b>${esc(g.lastPlay)}</div>` : ''}
     ${inj ? `<div class="lp inj"><b style="color:var(--loss)">Injury</b>${esc(inj.text)}</div>` : ''}
-    ${o ? `<div class="odds">${o.details ? `<span><b>Spread</b>${esc(o.details)}</span>` : ''}${o.overUnder ? `<span><b>O/U</b>${o.overUnder}</span>` : ''}${o.awayML ? `<span><b>ML</b>${esc(g.away.abbr)} ${ml(o.awayML)} · ${esc(g.home.abbr)} ${ml(o.homeML)}</span>` : ''}</div>` : ''}
+    ${o ? `<div class="odds">${o.details ? `<span><b>${g.league === 'nhl' ? 'Favorite' : 'Spread'}</b>${esc(o.details)}</span>` : ''}${o.overUnder ? `<span><b>O/U</b>${o.overUnder}</span>` : ''}${o.awayML ? `<span><b>ML</b>${esc(g.away.abbr)} ${ml(o.awayML)} · ${esc(g.home.abbr)} ${ml(o.homeML)}</span>` : ''}</div>` : ''}
     ${outLine}
     ${e?.top ? `<div><span class="tag t-pick">Pick: ${esc(e.top.pick)} · ${e.top.est}%</span></div>` : ''}
   </button>`;
