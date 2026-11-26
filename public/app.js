@@ -628,7 +628,7 @@ function renderGameLive(r) {
   const lastPlay = sum?.plays?.[0];
   const inj = sum?.liveInjuries?.[0];
   const top = `<div class="vs">${side(g.away)}<div class="mid">${mid}</div>${side(g.home)}</div>${wp}`;
-  const playHTML = `<div class="k">${live ? 'Latest play' : 'Final play'} <span>${lastPlay ? esc(`${lastPlay.periodLabel || ''} ${lastPlay.clock}`) : ''}</span></div><div class="pop-in">${lastPlay ? actorsHTML(lastPlay, { compact: true }) : esc(g.lastPlay || 'Waiting for the first play')}</div>`;
+  const playHTML = `<div class="k">${live ? 'Latest play' : 'Final play'} <span>${lastPlay ? esc(`${lastPlay.periodLabel || ''} ${lastPlay.clock}`) : ''}</span></div><div class="pop-in">${lastPlay ? playAnim(lastPlay, g.league) + actorsHTML(lastPlay, { compact: true }) : esc(g.lastPlay || 'Waiting for the first play')}</div>`;
   const injHTML = `<div class="k">Latest injury <span>${inj ? esc(`${inj.periodLabel || ''} ${inj.clock}`) : ''}</span></div><div class="pop-in">${inj ? (inj.injured?.length ? injuredHTML(inj) : esc(inj.text)) : 'No in-game injuries reported so far.'}</div>`;
   // Build the frame once per game, then only swap the parts that changed so nothing flickers.
   const key = `${g.id}:${live || post ? 1 : 0}`;
@@ -860,6 +860,48 @@ function actorsHTML(p, { compact = false } = {}) {
 const injuredHTML = (p) => (p.injured || []).map((x) => `<div class="actor sm injr ${x.returned ? 'back' : ''}">${pface(x, 'ph')}<div><span class="an">${esc(x.name)}</span> <span class="al">${x.returned ? '✅ back in the game' : '🚑 hurt on the play'}</span></div></div>`).join('');
 const playShort = (p) => (p?.who?.[0] ? `${p.who[0].name}: ${p.who[0].line}${p.defense?.[0] ? ` (${p.defense[0].line.toLowerCase()} by ${p.defense[0].name})` : ''}` : p?.text || '');
 const injShort = (p) => (p?.injured?.length ? p.injured.map((x) => `${x.name} (${x.team}) ${x.returned ? 'is back in the game' : 'got hurt'}`).join(' · ') : p?.text || '');
+// A short one-time animation for a new play: a spiral for a pass, a runner for a run, a waving
+// yellow flag for a penalty, goal posts on a score, and basketball shots into a hoop. Pure CSS, only on new plays.
+const FB_SVG = '<svg class="fb" viewBox="0 0 32 18" width="30" height="17"><path d="M1 9C7 0.5 25 0.5 31 9C25 17.5 7 17.5 1 9Z" fill="#8a4a22" stroke="#4d2410" stroke-width="1"/><path d="M5 5.2C7 4.4 7 13.6 5 12.8M27 5.2C25 4.4 25 13.6 27 12.8" stroke="#f3eadf" stroke-width="1.1" fill="none"/><g class="laces" stroke="#f3eadf" stroke-linecap="round"><path d="M10.5 9H21.5" stroke-width="1.3"/><path d="M12 7.3V10.7M14 7.3V10.7M16 7.3V10.7M18 7.3V10.7M20 7.3V10.7" stroke-width="1.1"/></g><path class="shine" d="M8 5.5C12 3.4 20 3.4 24 5.5" stroke="#ffffff55" stroke-width="1.2" fill="none"/></svg>';
+const FLAG_SVG = '<svg class="flag" viewBox="0 0 34 34" width="34" height="34"><path d="M5 3V32" stroke="#d9d9d9" stroke-width="2.2" stroke-linecap="round"/><g class="cloth"><path d="M6 4C12 2 17 7 24 5C27 4 29 4 31 4.5V17C29 16.5 27 16.5 24 17.5C17 19.5 12 14.5 6 16.5Z" fill="#ffd400" stroke="#c9a400" stroke-width="1"/><path d="M8 8C13 6.5 18 10.5 25 9" stroke="#fff3" stroke-width="1.4" fill="none"/></g></svg>';
+const POST_SVG = '<svg class="gpost" viewBox="0 0 30 42" width="30" height="42"><path d="M15 41V20M3 20H27M3 20V2M27 20V2" stroke="#ffd400" stroke-width="2.6" stroke-linecap="round" fill="none"/></svg>';
+const BB_SVG = '<svg class="bb" viewBox="0 0 20 20" width="19" height="19"><circle cx="10" cy="10" r="9" fill="#e8742a" stroke="#7a3510" stroke-width="1"/><path d="M1 10H19M10 1V19M3.6 3.6C7 7 7 13 3.6 16.4M16.4 3.6C13 7 13 13 16.4 16.4" stroke="#7a3510" stroke-width="1" fill="none"/></svg>';
+const HOOP_SVG = '<svg class="hoop" viewBox="0 0 34 42" width="34" height="42"><path d="M31 2V26" stroke="#e8e8e8" stroke-width="2.4" stroke-linecap="round"/><path d="M29 14H22" stroke="#e8e8e8" stroke-width="1.6"/><g class="net"><path d="M5 16L8 30M10 16L11 30M15 16L14 30M20 16L17 30M8 30H17M6 22H19M7 26H18" stroke="#ffffffcc" stroke-width="1" fill="none"/></g><ellipse cx="12.5" cy="15" rx="9" ry="2.2" fill="none" stroke="#ff5a1f" stroke-width="2.2"/></svg>';
+function playKind(p, league) {
+  const t = `${p.type || ''} ${p.who?.[0]?.line || ''} ${p.text || ''}`;
+  if (league === 'nba' || league === 'cbb') {
+    if (/block/i.test(t)) return 'bblock';
+    if (/turnover|steal|bad pass|lost ball|traveling/i.test(t)) return 'bsteal';
+    if (/rebound/i.test(t)) return 'breb';
+    if (/shot|jumper|layup|dunk|free throw|three point|hook|tip|fadeaway|makes|misses/i.test(t)) {
+      if (/miss/i.test(t)) return 'bmiss';
+      if (/dunk|alley oop/i.test(t)) return 'bdunk';
+      if (/three point|3-pt|3pt/i.test(t)) return 'b3';
+      return 'bmake';
+    }
+    return '';
+  }
+  if (/penalty|\bflag\b/i.test(t)) return 'flag';
+  if (/sack/i.test(t)) return 'sack';
+  if (/field goal|extra point|punt|kickoff|kick/i.test(t)) return 'kick';
+  if (/pass|catch|reception|incomplete|intercept|threw/i.test(t)) return 'pass';
+  if (/run|rush|scramble|kneel/i.test(t)) return 'run';
+  return '';
+}
+function playAnim(p, league) {
+  if (!['nfl', 'cfb', 'nba', 'cbb'].includes(league)) return '';
+  const k = playKind(p, league);
+  if (!k) return '';
+  if (k[0] === 'b') {
+    const ball = `<span class="arcy"><span class="tilt">${BB_SVG}</span></span>`;
+    const hoop = k === 'bsteal' || k === 'breb' || k === 'bblock' ? '' : `<span class="goal">${HOOP_SVG}</span>`;
+    return `<div class="panim hoopz ${k}" aria-hidden="true"><span class="lane"><span class="mover">${ball}</span></span>${k === 'bblock' ? '<b class="swat">✋</b>' : ''}${hoop}</div>`;
+  }
+  const t = `${p.type || ''} ${p.text || ''} ${p.who?.[0]?.line || ''}`;
+  const score = k === 'flag' || k === 'sack' ? '' : /touchdown|\bTD\b/i.test(t) ? 'td' : k === 'kick' && /field goal|extra point/i.test(t) && (p.scoring || /\bgood\b/i.test(t)) && !/no good|missed|blocked/i.test(t) ? 'fg' : '';
+  const icon = k === 'run' ? '<b class="runner">🏃</b>' : k === 'sack' ? '<b class="boom">💥</b>' : k === 'flag' ? FLAG_SVG : `<span class="arcy"><span class="tilt">${FB_SVG}</span></span>`;
+  return `<div class="panim ${k}${score ? ' scored ' + score : ''}" aria-hidden="true"><span class="lane"><span class="mover">${icon}</span></span>${k === 'flag' ? '<span class="flagtxt">FLAG</span>' : ''}${score ? `<span class="goal">${POST_SVG}</span>` : ''}</div>`;
+}
 function agoText(iso) {
   const ms = Date.now() - new Date(iso);
   if (!iso || !(ms >= 0)) return '';
@@ -884,7 +926,7 @@ function playRow(p, g) {
   for (const x of def) sub.push(`<div class="fl2">${pface(x, 'mini')}<span class="fr">${esc(x.line)}:</span> ${esc(x.name)}${x.total ? ` · ${esc(x.total)}` : ''}</div>`);
   if (!m && !p.injured?.length) sub.push(`<div class="fl2">${esc(p.text)}</div>`);
   for (const x of p.injured || []) sub.push(`<div class="fl2 ${x.returned ? 'back' : 'hurt'}">${pface(x, 'mini')}${x.returned ? '✅' : '🚑'} ${esc(x.name)} ${x.returned ? 'back in the game' : 'hurt on the play'}</div>`);
-  return `<div class="play feedp ${cls}">${av}<div class="pbody"><div class="fmeta"><span>${meta}${p.wall ? ` · <span data-ago="${esc(p.wall)}">${agoText(p.wall)}</span>` : ''}</span>${swing}</div><div class="fhead">${esc(head)}${p.voided ? ' <span class="est">no play</span>' : ''}</div>${sub.join('')}</div></div>`;
+  return `<div class="play feedp ${cls}">${av}<div class="pbody">${playAnim(p, g?.league)}<div class="fmeta"><span>${meta}${p.wall ? ` · <span data-ago="${esc(p.wall)}">${agoText(p.wall)}</span>` : ''}</span>${swing}</div><div class="fhead">${esc(head)}${p.voided ? ' <span class="est">no play</span>' : ''}</div>${sub.join('')}</div></div>`;
 }
 
 // ---------- PAST GAMES / SEASONS ----------

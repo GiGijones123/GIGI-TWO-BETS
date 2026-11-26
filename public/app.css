@@ -515,3 +515,91 @@ input, select { font: inherit; font-size: 16px; padding: 9px 10px; border: 1px s
 .ob .obs { font-size: 12px; color: var(--mute); }
 .myopen .strip { grid-auto-columns: max-content; }
 .myopen .hd { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+
+/* play animations: only run on a play that just arrived */
+.panim { display: none; position: relative; height: 0; overflow: hidden; }
+.play.slide-in .panim, .lb.popped .panim { display: block; animation: laneOpen 2.4s ease both; }
+.panim.scored, .panim.bmiss { animation-duration: 2.8s !important; }
+.panim .lane { position: absolute; left: 0; right: 0; bottom: 4px; height: 4px; border-radius: 99px; background: repeating-linear-gradient(90deg, #ffffff22 0 10px, transparent 10px 20px); }
+.panim .mover { position: absolute; left: 0; bottom: 2px; }
+.panim b { display: inline-block; font-size: 22px; line-height: 1; will-change: transform; }
+.panim .arcy, .panim .tilt, .panim .fb { display: block; will-change: transform; }
+/* pass: a tight spiral, nose following the arc, with a faint trail */
+.panim.pass .mover, .panim.kick .mover { animation: slideX 1.25s cubic-bezier(.35,.05,.55,1) .15s both; }
+.panim.pass .arcy { animation: arc 1.25s cubic-bezier(.3,0,.7,1) .15s both; }
+.panim.pass .tilt { animation: noseFollow 1.25s linear .15s both; }
+.panim.pass .tilt::before { content: ''; position: absolute; right: 24px; top: 7px; width: 34px; height: 3px; border-radius: 99px; background: linear-gradient(90deg, transparent, #ffffff40); }
+.panim.pass .fb { animation: spiralBody .14s linear .15s 9 alternate; }
+.panim.pass .laces { animation: spiralLaces .28s linear .15s 5; }
+/* kick: end over end */
+.panim.kick .arcy { animation: arcHigh 1.25s cubic-bezier(.3,0,.7,1) .15s both; }
+.panim.kick .tilt { animation: spin 1.25s linear .15s both; }
+.panim.run .mover { animation: slideX 1.5s linear .15s both; }
+.panim.run .runner { transform: scaleX(-1); animation: bob .25s ease-in-out .15s 6 alternate; }
+.panim.sack .mover { left: 50%; }
+.panim.sack .boom { animation: boom .7s cubic-bezier(.2,1.6,.4,1) .2s both; }
+/* penalty: a yellow flag thrown in, then waving */
+.panim.flag .mover { left: 38%; bottom: 0; animation: flagThrow .5s cubic-bezier(.3,1.4,.5,1) .1s both; }
+.panim.flag .cloth { transform-box: fill-box; transform-origin: 0 50%; animation: wave .32s ease-in-out .5s 5 alternate; }
+.panim .flagtxt { position: absolute; left: calc(38% + 40px); bottom: 10px; font: italic 900 16px/1 var(--disp); color: #ffd400; letter-spacing: .04em; animation: tdPop .4s cubic-bezier(.2,1.6,.4,1) .45s both; }
+/* scores: goal posts rise at the end of the lane and light up when the ball gets there */
+.panim .goal { position: absolute; right: 2px; bottom: 2px; transform-origin: 50% 100%; animation: postUp .4s cubic-bezier(.2,1.4,.4,1) .05s both; }
+.panim.scored .gpost { animation: postGlow .9s ease-out 1.35s both; }
+.panim.scored .mover { animation-name: slideGoal !important; }
+.panim.fg .arcy { animation-name: arcFG !important; }
+.panim.fg .tilt { animation: spin 1.25s linear .15s both; }
+/* basketball */
+.panim.hoopz .mover { animation: slideHoop 1.1s cubic-bezier(.35,.05,.55,1) .15s both; }
+.panim.hoopz .arcy { animation: arcShot 1.1s cubic-bezier(.3,0,.7,1) .15s both; }
+.panim.hoopz .tilt { animation: spin 1.1s linear .15s both; }
+.panim.b3 .arcy { animation-name: arcThree; }
+.panim.b3 .mover { animation-duration: 1.3s; } .panim.b3 .arcy, .panim.b3 .tilt { animation-duration: 1.3s; }
+.panim.bmake .net, .panim.b3 .net, .panim.bdunk .net { transform-box: fill-box; transform-origin: 50% 0; animation: swish .45s ease-out 1.2s both; }
+.panim.b3 .net { animation-delay: 1.4s; }
+.panim.bdunk .mover { animation: slideDunk .9s cubic-bezier(.4,0,.6,1) .15s both; }
+.panim.bdunk .arcy { animation: arcDunk .9s cubic-bezier(.5,0,.9,.6) .15s both; }
+.panim.bdunk .goal { animation: postUp .4s cubic-bezier(.2,1.4,.4,1) .05s both, rimShake .35s ease-in-out 1s 2 alternate; }
+.panim.bmiss .arcy { animation: arcMiss 1.6s cubic-bezier(.3,0,.7,1) .15s both; }
+.panim.bmiss .mover { animation: slideMiss 1.6s cubic-bezier(.35,.05,.55,1) .15s both; }
+.panim.bmiss .tilt { animation-duration: 1.6s; }
+.panim.breb .mover { left: 45%; animation: none; }
+.panim.breb .arcy { animation: dribble .36s cubic-bezier(.5,0,.5,1) .15s 4 alternate both; }
+.panim.breb .tilt { animation: none; }
+.panim.bsteal .mover { animation: slideBack .8s cubic-bezier(.2,.7,.3,1) .15s both; }
+.panim.bsteal .arcy { animation: dribble .2s cubic-bezier(.5,0,.5,1) .15s 4 alternate both; }
+.panim.bsteal .tilt { animation: spinBack .8s linear .15s both; }
+.panim.bblock .mover { animation: slideBlock 1s cubic-bezier(.3,.6,.4,1) .15s both; }
+.panim.bblock .arcy { animation: arcBlock 1s ease-out .15s both; }
+.panim .swat { position: absolute; left: 54%; bottom: 10px; font-size: 22px; animation: boom .5s cubic-bezier(.2,1.6,.4,1) .45s both; }
+@keyframes laneOpen { 0% { height: 0; } 10% { height: 44px; } 88% { height: 44px; } 100% { height: 0; } }
+@keyframes slideX { from { left: 0; } to { left: calc(100% - 32px); } }
+@keyframes arc { 0% { transform: translateY(0); } 50% { transform: translateY(-20px); } 100% { transform: translateY(0); } }
+@keyframes arcHigh { 0% { transform: translateY(0); } 50% { transform: translateY(-26px); } 100% { transform: translateY(0); } }
+@keyframes noseFollow { 0% { transform: rotate(-32deg); } 50% { transform: rotate(0deg); } 100% { transform: rotate(30deg); } }
+@keyframes spiralBody { from { transform: scaleY(1); } to { transform: scaleY(.8); } }
+@keyframes spiralLaces { 0% { transform: translateY(-4px); opacity: 0; } 20% { opacity: 1; } 50% { transform: translateY(0); } 80% { opacity: 1; } 100% { transform: translateY(4px); opacity: 0; } }
+@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(720deg); } }
+@keyframes bob { from { translate: 0 0; } to { translate: 0 -4px; } }
+@keyframes boom { 0% { transform: scale(0); opacity: 0; } 60% { transform: scale(1.6); opacity: 1; } 100% { transform: scale(1); opacity: 1; } }
+@keyframes tdPop { from { transform: scale(0); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+@keyframes postUp { from { transform: scaleY(0); opacity: 0; } to { transform: scaleY(1); opacity: 1; } }
+@keyframes postGlow { 0% { filter: none; } 30% { filter: drop-shadow(0 0 6px #ffd400) drop-shadow(0 0 12px #c6ff3d); transform: scale(1.12); } 100% { filter: drop-shadow(0 0 3px #ffd40088); transform: scale(1); } }
+@keyframes slideGoal { from { left: 0; } to { left: calc(100% - 46px); } }
+@keyframes arcFG { 0% { transform: translateY(0); } 55% { transform: translateY(-32px); } 100% { transform: translateY(-22px); } }
+@keyframes slideHoop { from { left: 0; } to { left: calc(100% - 37px); } }
+@keyframes arcShot { 0% { transform: translateY(0); } 55% { transform: translateY(-34px); } 85% { transform: translateY(-24px); } 100% { transform: translateY(-12px); } }
+@keyframes arcThree { 0% { transform: translateY(0); } 55% { transform: translateY(-40px); } 85% { transform: translateY(-26px); } 100% { transform: translateY(-12px); } }
+@keyframes slideDunk { 0% { left: 0; } 70% { left: calc(100% - 37px); } 100% { left: calc(100% - 37px); } }
+@keyframes arcDunk { 0% { transform: translateY(0); } 60% { transform: translateY(-38px); } 100% { transform: translateY(-10px); } }
+@keyframes rimShake { from { rotate: -6deg; } to { rotate: 6deg; } }
+@keyframes swish { 0% { transform: scaleY(1); } 40% { transform: scaleY(1.35) scaleX(.85); } 100% { transform: scaleY(1); } }
+@keyframes slideMiss { 0% { left: 0; } 60% { left: calc(100% - 37px); } 100% { left: calc(100% - 110px); } }
+@keyframes arcMiss { 0% { transform: translateY(0); } 35% { transform: translateY(-34px); } 60% { transform: translateY(-26px); } 80% { transform: translateY(-36px); } 100% { transform: translateY(0); } }
+@keyframes dribble { from { transform: translateY(-22px); } to { transform: translateY(0); } }
+@keyframes slideBack { from { left: calc(100% - 30px); } to { left: 0; } }
+@keyframes spinBack { from { transform: rotate(0); } to { transform: rotate(-540deg); } }
+@keyframes slideBlock { 0% { left: 20%; } 40% { left: 50%; } 100% { left: 10%; } }
+@keyframes arcBlock { 0% { transform: translateY(0); } 40% { transform: translateY(-26px); } 100% { transform: translateY(-4px); } }
+@keyframes flagThrow { 0% { transform: translate(-30px, -30px) rotate(-70deg); opacity: 0; } 100% { transform: none; opacity: 1; } }
+@keyframes wave { from { transform: skewY(-7deg) scaleX(1); } to { transform: skewY(7deg) scaleX(.86); } }
+@media (prefers-reduced-motion: reduce) { .panim { display: none !important; } }
