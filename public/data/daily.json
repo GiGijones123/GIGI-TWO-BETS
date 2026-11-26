@@ -1,0 +1,540 @@
+{
+ "date": "2026-11-26",
+ "updated": "2026-11-26T20:05:00Z",
+ "label": "Thanksgiving Thursday and Black Friday",
+ "games": [
+  {
+   "key": "NFL:CHI@DET",
+   "id": "chi-det",
+   "note": "Tied atop the NFC North. Bears on a 5-game win streak; line flipped from Lions -2.5 at the May open, with heavy public money on Chicago.",
+   "books": [
+    {
+     "book": "DraftKings",
+     "spread": "CHI -2.5",
+     "total": "55.5"
+    },
+    {
+     "book": "FanDuel",
+     "spread": "CHI -1.5",
+     "ml": "CHI -124 / DET +106",
+     "total": "55.5"
+    }
+   ]
+  },
+  {
+   "key": "NFL:PHI@DAL",
+   "id": "phi-dal",
+   "note": "Biggest line move of the slate: Dallas opened -1.5 in May. Cowboys score 30.6 a game, best in the NFC; Eagles average 16.7. Dallas won the first meeting 38-21. Philadelphia is starting Joe Milton at QB with Jalen Hurts on IR.",
+   "books": [
+    {
+     "book": "DraftKings",
+     "spread": "DAL -8.5",
+     "total": "47.5"
+    },
+    {
+     "book": "FanDuel",
+     "spread": "DAL -8.5",
+     "ml": "DAL -480 / PHI +370",
+     "total": "48.5"
+    },
+    {
+     "book": "Yahoo consensus",
+     "spread": "DAL -9",
+     "ml": "DAL -495 / PHI +377",
+     "total": "49.5"
+    }
+   ]
+  },
+  {
+   "key": "NFL:KC@BUF",
+   "id": "kc-buf",
+   "note": "AFC seeding on the line. Heavy rain and wind forecast in Buffalo; the total has fallen from 50.5. Josh Allen is 5-1 against Mahomes in the regular season.",
+   "books": [
+    {
+     "book": "FanDuel",
+     "spread": "BUF -3",
+     "ml": "BUF -149 / KC +126",
+     "total": "46.5"
+    },
+    {
+     "book": "DraftKings",
+     "spread": "BUF -3",
+     "total": "50.5 (open)"
+    }
+   ]
+  },
+  {
+   "key": "NFL:DEN@PIT",
+   "id": "den-pit",
+   "note": "Pittsburgh released Aaron Rodgers on Wednesday after he criticised coach Mike McCarthy; Mason Rudolph starts. 79% of spread bets are on Denver and 75% of total bets on the under.",
+   "books": [
+    {
+     "book": "DraftKings",
+     "spread": "DEN -3",
+     "total": "37.5"
+    },
+    {
+     "book": "FOX Sports",
+     "spread": "DEN -4.5",
+     "ml": "DEN -205 / PIT +172",
+     "total": "36.5"
+    }
+   ]
+  },
+  {
+   "key": "NBA:MIA@NYK",
+   "id": "mia-nyk",
+   "note": "NBA Cup, East Group B. Knicks have won 6 straight and are 7-3 at home. Miami is 1-7 against the spread on the road.",
+   "books": [
+    {
+     "book": "DraftKings",
+     "spread": "NYK -3.5",
+     "total": "224.5"
+    },
+    {
+     "book": "Bovada",
+     "spread": "NYK -4.5",
+     "ml": "NYK -170 / MIA +145",
+     "total": "224.5"
+    }
+   ]
+  },
+  {
+   "key": "NBA:ATL@BOS",
+   "id": "atl-bos",
+   "note": "NBA Cup, East Group C. Boston allows 102.9 a game and is 6-12 to the over. Atlanta on a 4-game win streak. Tatum scored 41 on Nov 24.",
+   "books": [
+    {
+     "book": "BetOnline",
+     "spread": "BOS -9.5",
+     "ml": "BOS -420 / ATL +315",
+     "total": "221.5"
+    }
+   ]
+  },
+  {
+   "key": "NBA:DAL@PHX",
+   "id": "dal-phx",
+   "note": "Dallas has won 4 straight, allowing 102.3 a game in that run, and is already through to the Cup knockouts. Phoenix is 3-6 against the spread at home but has won the last four meetings.",
+   "books": [
+    {
+     "book": "DraftKings",
+     "spread": "PHX -3.5",
+     "ml": "PHX -142 / DAL +120",
+     "total": "227.5"
+    },
+    {
+     "book": "MyBookie",
+     "spread": "PHX -3",
+     "ml": "PHX -154 / DAL +126",
+     "total": "227.5"
+    }
+   ]
+  },
+  {
+   "key": "NBA:LAL@SA",
+   "id": "lal-sa",
+   "note": "NBA Cup, West Group C. Both teams 9-1 in their last 10. Lakers are 7-1 on the road and 11-7 against the spread; Spurs are 8-11. Wembanyama had 44 and 16 in his return.",
+   "books": [
+    {
+     "book": "DraftKings",
+     "spread": "SA -6.5",
+     "total": "225.5"
+    },
+    {
+     "book": "Heritage",
+     "spread": "SA -5.5",
+     "ml": "SA -200 / LAL +170",
+     "total": "224.5"
+    }
+   ]
+  }
+ ],
+ "picks": [
+  {
+   "game": "NFL:KC@BUF",
+   "pick": "Under 46.5",
+   "odds": -110,
+   "book": "FanDuel",
+   "est": 57,
+   "why": "Rain and wind in Buffalo and no Kenneth Walker III for Kansas City. The number has already dropped 4 points, so the value is thinner than it was."
+  },
+  {
+   "game": "NBA:LAL@SA",
+   "pick": "Lakers +6.5",
+   "odds": -110,
+   "book": "DraftKings",
+   "est": 53,
+   "why": "Lakers are 7-1 on the road and San Antonio is missing Harris, Harper and Quaintance. Austin Reaves is now out too, so this is a smaller edge than it was."
+  },
+  {
+   "game": "NBA:MIA@NYK",
+   "pick": "Knicks -3.5",
+   "odds": -110,
+   "book": "DraftKings",
+   "est": 55,
+   "why": "Knicks on a 6-game run and 7-3 at home; Miami is 1-7 against the spread on the road and allows 118.9. New York is without OG Anunoby."
+  },
+  {
+   "game": "NFL:PHI@DAL",
+   "pick": "Eagles +8.5",
+   "odds": -110,
+   "book": "DraftKings",
+   "est": 54,
+   "why": "Big number for a division game, and Dallas is down Ferguson, Mingo, Booker and Locke. Risk: Philadelphia starts Joe Milton at QB with Hurts on IR."
+  },
+  {
+   "game": "NBA:ATL@BOS",
+   "pick": "Under 221.5",
+   "odds": -110,
+   "book": "BetOnline",
+   "est": 53,
+   "why": "Boston's defense allows 102.9 and has gone under in 12 of 18. Atlanta is without CJ McCollum."
+  },
+  {
+   "game": "NBA:DAL@PHX",
+   "pick": "Mavericks +3.5",
+   "odds": -110,
+   "book": "DraftKings",
+   "est": 53,
+   "why": "Dallas defense has tightened in a 4-game streak, and Phoenix is 3-6 against the spread at home. Lively is out for Dallas."
+  },
+  {
+   "game": "NFL:CHI@DET",
+   "pick": "Lions +1.5",
+   "odds": -110,
+   "book": "FanDuel",
+   "est": 51,
+   "why": "Close to a coin flip. Home team in a tied division race with public money on Chicago. Lean only."
+  }
+ ],
+ "props": [
+  {
+   "game": "NFL:PHI@DAL",
+   "player": "CeeDee Lamb",
+   "team": "DAL",
+   "stat": "Receiving yards",
+   "line": 90.5,
+   "book": "Listed",
+   "lean": "Over",
+   "est": 53,
+   "why": "Ferguson and Mingo are out, so more targets should go his way."
+  },
+  {
+   "game": "NFL:PHI@DAL",
+   "player": "Saquon Barkley",
+   "team": "PHI",
+   "stat": "Rushing yards",
+   "line": 64.5,
+   "book": "BetMGM",
+   "lean": "Under",
+   "est": 52,
+   "why": "If Philadelphia trails by a touchdown or more, carries tend to dry up."
+  },
+  {
+   "game": "NFL:PHI@DAL",
+   "player": "Brevyn Spann-Ford",
+   "team": "DAL",
+   "stat": "Receiving yards",
+   "line": 13.5,
+   "book": "Listed",
+   "lean": "Over",
+   "est": 52,
+   "why": "Likely the top tight end with Ferguson out."
+  }
+ ],
+ "players": {
+  "Caleb Williams": {
+   "why": "68.3% completions at 7.9 yds/att; 264 yds/g over his last 5 starts, but the Bears split plays nearly 50/50 run-pass, capping volume (138 and 181 yds in low-attempt games).",
+   "propStat": "Passing yards"
+  },
+  "D'Andre Swift": {
+   "why": "Takes half of Chicago's carries (168 of 336) and is the goal-line back (10 TD), though 3.7 YPC trails Kyle Monangai's 5.0 on 68 carries.",
+   "propStat": "Rushing yards"
+  },
+  "Luther Burden III": {
+   "why": "Team-high 21.6% target share (68 of 315) with a 75% catch rate; leads the Bears in catches, yards and receiving TDs.",
+   "propStat": "Receiving yards"
+  },
+  "Rome Odunze": {
+   "why": "Downfield option: 15.9 yds per catch and 10.2 per target on a 17.8% target share.",
+   "propStat": "Receiving yards"
+  },
+  "Colston Loveland": {
+   "why": "Second on team in targets (59, 18.7% share) with Cole Kmet listed out; short-area volume at 9.8 yds/catch.",
+   "propStat": "Receiving yards"
+  },
+  "Jared Goff": {
+   "why": "67.8% completions and 8.2 yds/att with a 5:1 TD-INT ratio; averages 272 yds/g, with 300+ in 4 of 10 games (412 at CAR).",
+   "propStat": "Passing yards"
+  },
+  "Jahmyr Gibbs": {
+   "why": "Workhorse with 76% of Detroit's carries (222 of 293) plus 58 targets; 1,502 scrimmage yards and 15 TD in 10 games.",
+   "propStat": "Rushing yards"
+  },
+  "Amon-Ra St. Brown": {
+   "why": "Dominant 29.5% target share (97 of 329) from the slot with a 72% catch rate; team leader in every receiving category.",
+   "propStat": "Receiving yards"
+  },
+  "Jameson Williams": {
+   "why": "Big-play threat: 17.0 yds per catch and 10.7 per target, 6 TD on just 36 catches.",
+   "propStat": "Receiving yards"
+  },
+  "Sam LaPorta": {
+   "why": "Steady third option with an 18.2% target share and 12.2 yds per catch.",
+   "propStat": "Receiving yards"
+  },
+  "Patrick Mahomes": {
+   "why": "66.8% completions, 8.0 yds/att and 19 TD vs 4 INT; carries the passing game with no receiver above 51 targets.",
+   "propStat": "Passing yards"
+  },
+  "Kenneth Walker III": {
+   "why": "Handles 65% of KC carries (159 of 244) at 5.5 YPC, the most efficient lead back of the four teams.",
+   "propStat": "Rushing yards"
+  },
+  "Rashee Rice": {
+   "why": "81% catch rate and 10.1 yds per target; most efficient KC wideout on a 13.3% target share.",
+   "propStat": "Receiving yards"
+  },
+  "Xavier Worthy": {
+   "why": "Volume (17.9% target share) without efficiency: 8.4 yds per catch, 5.6 per target.",
+   "propStat": "Receiving yards"
+  },
+  "Travis Kelce": {
+   "why": "Still KC's leading receiver: team-high 51 targets (18.3%) and 14.6 yds per catch.",
+   "propStat": "Receiving yards"
+  },
+  "Josh Allen": {
+   "why": "Low passing volume (30 att/g, 253 yds/g) in a run-first offense; scores with his legs (11 rush TD) more than his arm (14 pass TD).",
+   "propStat": "Passing yards"
+  },
+  "James Cook III": {
+   "why": "65% of Buffalo's carries (209 of 320) at 5.1 YPC; 106 rush yds per game.",
+   "propStat": "Rushing yards"
+  },
+  "Khalil Shakir": {
+   "why": "Team-high 18.5% target share (53 of 287) and 14.2 yds per catch from the slot.",
+   "propStat": "Receiving yards"
+  },
+  "DJ Moore": {
+   "why": "17.1% target share, leads Bills WRs with 4 TD at 15.0 yds per catch.",
+   "propStat": "Receiving yards"
+  },
+  "Dalton Kincaid": {
+   "why": "Most efficient Bills target: 78% catch rate and 11.9 yds per target.",
+   "propStat": "Receiving yards"
+  },
+  "Joe Milton": {
+   "propStat": "Passing yards"
+  },
+  "Saquon Barkley": {
+   "why": "Volume is the issue: about 17 carries a game would be needed to clear 75, and he has topped 62 only once in five logged games behind an offense ranked 29th in rushing. His best game against this group was 62 yards vs Dallas in Week 7, and Dallas allows 389.5 yards per game (31st).",
+   "propStat": "Rushing yards"
+  },
+  "DeVonta Smith": {
+   "why": "He is the top target in a passing game that ranks 28th at 166.8 yards per game, so his ceiling depends on Milton's accuracy. He had his only 100-yard game in Week 2.",
+   "propStat": "Receiving yards"
+  },
+  "Darius Cooper": {},
+  "Dallas Goedert": {},
+  "Dak Prescott": {
+   "why": "He averages about 277 yards a game and has topped 320 in three straight weeks, throwing to two 100-yard receivers. Dallas leans pass (60% of plays) because its defense keeps games high-scoring. He threw for 212 in the first meeting with Philadelphia.",
+   "propStat": "Passing yards"
+  },
+  "Javonte Williams": {
+   "why": "He gets steady volume of about 17 carries a game and is the goal-line back (10 TDs). His season high of 155 came against this Eagles defense, which ranks 21st in yards allowed.",
+   "propStat": "Rushing yards"
+  },
+  "CeeDee Lamb": {
+   "why": "He averages about 100 yards a game as the top target in the league's No. 2 passing offense. With TE Jake Ferguson out, more targets could shift to him.",
+   "propStat": "Receiving yards"
+  },
+  "George Pickens": {
+   "why": "As the No. 2 option he gets single coverage, which has produced 247 yards over his last two games. He had 57 against Philadelphia in Week 7.",
+   "propStat": "Receiving yards"
+  },
+  "Brevyn Spann-Ford": {},
+  "Bo Nix": {
+   "why": "He is very consistent at 222-237 yards in four straight games, on a team that runs more than most. That keeps his volume steady but caps his ceiling. Pittsburgh's pass defense ranks 10th in yards allowed.",
+   "propStat": "Passing yards"
+  },
+  "Jonah Coleman": {},
+  "Courtland Sutton": {
+   "why": "His output is modest (about 30 yards a game) in a low-volume passing game that ranks 25th. Targets are spread across Waddle, Engram and Bryant.",
+   "propStat": "Receiving yards"
+  },
+  "Jaylen Waddle": {
+   "why": "He has been held under 50 yards in five straight logged games. The Broncos' run-leaning, ball-control approach limits deep shots.",
+   "propStat": "Receiving yards"
+  },
+  "Evan Engram": {},
+  "Mason Rudolph": {
+   "propStat": "Passing yards"
+  },
+  "Jaylen Warren": {
+   "why": "His efficiency (5.7 YPC) makes him boom-or-bust: 100+ in three of five logged games, but 15 yards against Cincinnati. With a backup QB starting, Pittsburgh may lean on the run more than its usual 37%.",
+   "propStat": "Rushing yards"
+  },
+  "DK Metcalf": {
+   "why": "His results are volatile (4 to 93 yards) in a passing offense that ranks 22nd. A QB change to Rudolph adds uncertainty, and Denver's Pat Surtain II is a likely shadow matchup.",
+   "propStat": "Receiving yards"
+  },
+  "Roman Wilson": {},
+  "Pat Freiermuth": {},
+  "Giannis Antetokounmpo": {
+   "why": "Team-high 28.4 PPG plus 12.7 REB in 33 minutes on the league's fastest-paced team in this slate (112.2 possessions).",
+   "propStat": "Points"
+  },
+  "Bam Adebayo": {
+   "why": "Second option at 19.1 PPG in 34 minutes a night.",
+   "propStat": "Points"
+  },
+  "Jalen Brunson": {
+   "why": "Lead scorer at 26.1 PPG in 35.3 minutes; was Questionable on the 11/25 FantasyData report.",
+   "propStat": "Points"
+  },
+  "Karl-Anthony Towns": {
+   "why": "21.2 PPG as the No. 2 option; with Anunoby out there are more shots to go around.",
+   "propStat": "Points"
+  },
+  "Nickeil Alexander-Walker": {
+   "why": "Team-leading 21.3 PPG in 34 minutes, with McCollum out leaving him as the top guard scorer.",
+   "propStat": "Points"
+  },
+  "Jalen Johnson": {
+   "why": "Plays 36 MPG and fills the sheet (19.1/9.1/6.9) as a point-forward.",
+   "propStat": "Points"
+  },
+  "Jayson Tatum": {
+   "why": "27.3 PPG in 34.2 minutes; scored 24+ in each of his last five.",
+   "propStat": "Points"
+  },
+  "Paul George": {
+   "why": "Second option at 20.4 PPG in 30.5 minutes.",
+   "propStat": "Points"
+  },
+  "Cooper Flagg": {
+   "why": "Leads DAL at 24.3 PPG and also runs offense (6.7 AST).",
+   "propStat": "Points"
+  },
+  "Kyrie Irving": {
+   "why": "21.3 PPG; trending up with 34 in the last game.",
+   "propStat": "Points"
+  },
+  "Devin Booker": {
+   "why": "Leads PHX at 24.5 PPG in 35.5 minutes."
+  },
+  "Dillon Brooks": {
+   "why": "15.0 PPG in 29.3 minutes as the No. 2 starter-scorer."
+  },
+  "Luka Doncic": {
+   "why": "League-leading 36.6 PPG (StatMuse); with Reaves out he carries even more of the offense.",
+   "propStat": "Points"
+  },
+  "Quentin Grimes": {
+   "why": "Volatile secondary scorer (14.5 over last 10, including a 47) who starts while Reaves is out.",
+   "propStat": "Points"
+  },
+  "Victor Wembanyama": {
+   "why": "30.7 PPG and 32.0 over his last 10, with 44 and 50 in the last two; listed day-to-day.",
+   "propStat": "Points"
+  },
+  "Stephon Castle": {
+   "why": "Lead guard (17.9 PPG last 10) with Fox and Harper out or limited.",
+   "propStat": "Points"
+  }
+ },
+ "news": [
+  {
+   "league": "NFL",
+   "head": "Rams beat Packers in the first Thanksgiving Eve game",
+   "body": "Micah Parsons made his season debut for Green Bay, but the Packers were outscored in the second half. Kam Kinchens was ejected.",
+   "src": "SI via 15minutenews",
+   "url": "https://www.15minutenews.com/sports/2026/11/26"
+  },
+  {
+   "league": "NFL",
+   "head": "Steelers release Aaron Rodgers; Mason Rudolph starts Black Friday",
+   "body": "Pittsburgh benched Rodgers on Monday and released him Wednesday after he criticised coach Mike McCarthy on The Pat McAfee Show.",
+   "src": "Yahoo Sports / WTAE",
+   "url": "https://www.wtae.com/article/steelers-mason-rudolph-aaron-rodgers-released/74536651"
+  },
+  {
+   "league": "NFL",
+   "head": "Eagles turn to Joe Milton with Jalen Hurts on IR",
+   "body": "Milton, in his third season, starts at Dallas with Hurts out with a calf injury.",
+   "src": "NBC Philadelphia",
+   "url": "https://www.nbcphiladelphia.com/news/sports/nfl/philadelphia-eagles/live-updates-eagles-vs-cowboys-thanksgiving-week-12/4503415/"
+  },
+  {
+   "league": "NFL",
+   "head": "Chiefs at Bills headlines a Thanksgiving triple-header",
+   "body": "Bears and Lions meet at 8-2 apiece, Eagles visit Dallas, and the Broncos play at Pittsburgh on Black Friday.",
+   "src": "CBS Sports",
+   "url": "https://www.cbssports.com/nfl/news/nfl-thanksgiving-games-2026-schedule-black-friday-rams-packers/"
+  },
+  {
+   "league": "NBA",
+   "head": "Timberwolves win at Oklahoma City in the NBA Cup",
+   "body": "Ten players were ruled out, including Anthony Edwards after knee arthroscopy and Chet Holmgren with a right knee injury.",
+   "src": "ClutchPoints",
+   "url": "https://clutchpoints.com/nba/nba-stories/timberwolves-thunder-nba-cup-injury-report-10-players"
+  },
+  {
+   "league": "NBA",
+   "head": "Dillon Brooks ejected as Suns-Rockets feud boils over",
+   "body": "The ejection came during a running feud involving Kevin Durant.",
+   "src": "SI via 15minutenews",
+   "url": "https://www.15minutenews.com/sports/2026/11/26"
+  },
+  {
+   "league": "NHL",
+   "head": "Predators beat the Stars in Dallas",
+   "body": "Mavrik Bourque scored his first goal of the season in his first game back in Dallas.",
+   "src": "SI via 15minutenews",
+   "url": "https://www.15minutenews.com/sports/2026/11/26"
+  },
+  {
+   "league": "CFB",
+   "head": "Pitt's top back doubtful against Cal",
+   "body": "Damon Ferguson Jr. is listed as doubtful, and key Cal defensive backs are questionable.",
+   "src": "SI via 15minutenews",
+   "url": "https://www.15minutenews.com/sports/2026/11/26"
+  },
+  {
+   "league": "College",
+   "head": "Nebraska wins the first Big Ten volleyball tournament",
+   "body": "Murray had 18 kills against Wisconsin, and the Huskers head into the NCAA Tournament unbeaten.",
+   "src": "SI via 15minutenews",
+   "url": "https://www.15minutenews.com/sports/2026/11/26"
+  },
+  {
+   "league": "Soccer",
+   "head": "PSG lose Kvaratskhelia and Doue for the season",
+   "body": "Both wingers will miss the rest of 2026-27 as PSG chase a third straight Champions League.",
+   "src": "SI via 15minutenews",
+   "url": "https://www.15minutenews.com/sports/2026/11/26"
+  },
+  {
+   "league": "Soccer",
+   "head": "Bayern lose 2-1 to Lille",
+   "body": "Joshua Kimmich criticised the club's handling of Jamal Musiala after the defeat.",
+   "src": "Guardian via 15minutenews",
+   "url": "https://www.15minutenews.com/sports/2026/11/26"
+  },
+  {
+   "league": "Soccer",
+   "head": "Barcelona win in Baku; Fermin banned two games",
+   "body": "Anthony Gordon scored twice against Sabah. The competition committee rejected Barca's appeal over Fermin's red card.",
+   "src": "Yahoo Sports",
+   "url": "https://sports.yahoo.com/soccer/articles/fc-barcelona-news-26-november-100000277.html"
+  },
+  {
+   "league": "F1",
+   "head": "Bearman extends with Haas; Alonso ill before Qatar",
+   "body": "Oliver Bearman signs for a third season. Fernando Alonso will miss part of the Qatar Grand Prix weekend (Nov 27-29) with a viral infection.",
+   "src": "BBC via 15minutenews",
+   "url": "https://www.15minutenews.com/sports/2026/11/26"
+  }
+ ]
+}
