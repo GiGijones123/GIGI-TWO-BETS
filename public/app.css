@@ -515,3 +515,27 @@ input, select { font: inherit; font-size: 16px; padding: 9px 10px; border: 1px s
 .ob .obs { font-size: 12px; color: var(--mute); }
 .myopen .strip { grid-auto-columns: max-content; }
 .myopen .hd { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+
+/* play animations: only run on a play that just arrived */
+.panim { display: none; position: relative; height: 0; overflow: hidden; }
+.play.slide-in .panim, .lb.popped .panim { display: block; animation: laneOpen 2.2s ease both; }
+.panim .lane { position: absolute; left: 0; right: 0; bottom: 4px; height: 4px; border-radius: 99px; background: repeating-linear-gradient(90deg, #ffffff22 0 10px, transparent 10px 20px); }
+.panim .mover { position: absolute; left: 0; bottom: 2px; }
+.panim b { display: inline-block; font-size: 22px; line-height: 1; will-change: transform; }
+.panim.pass .mover, .panim.kick .mover { animation: slideX 1.3s cubic-bezier(.3,.1,.4,1) .15s both; }
+.panim.pass .ball { animation: arc 1.3s ease-in-out .15s both, spin 1.3s linear .15s both; }
+.panim.kick .ball { animation: arcHigh 1.3s ease-in-out .15s both, spin 1.3s linear .15s both; }
+.panim.run .mover { animation: slideX 1.5s linear .15s both; }
+.panim.run .runner { transform: scaleX(-1); animation: bob .25s ease-in-out .15s 6 alternate; }
+.panim.sack .mover { left: 50%; }
+.panim.sack .boom { animation: boom .7s cubic-bezier(.2,1.6,.4,1) .2s both; }
+.panim .tdpop { position: absolute; right: 0; top: 0; font: italic 900 16px/1 var(--disp); color: var(--lime); animation: tdPop .6s cubic-bezier(.2,1.6,.4,1) 1.3s both; }
+@keyframes laneOpen { 0% { height: 0; } 12% { height: 40px; } 85% { height: 40px; } 100% { height: 0; } }
+@keyframes slideX { from { left: 0; } to { left: calc(100% - 26px); } }
+@keyframes arc { 0% { transform: translateY(0); } 50% { transform: translateY(-22px); } 100% { transform: translateY(0); } }
+@keyframes arcHigh { 0% { transform: translateY(0); } 50% { transform: translateY(-30px); } 100% { transform: translateY(0); } }
+@keyframes spin { from { rotate: -30deg; } to { rotate: 330deg; } }
+@keyframes bob { from { translate: 0 0; } to { translate: 0 -4px; } }
+@keyframes boom { 0% { transform: scale(0); opacity: 0; } 60% { transform: scale(1.6); opacity: 1; } 100% { transform: scale(1); opacity: 1; } }
+@keyframes tdPop { from { transform: scale(0); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .panim { display: none !important; } }

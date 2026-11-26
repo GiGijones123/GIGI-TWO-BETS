@@ -628,7 +628,7 @@ function renderGameLive(r) {
   const lastPlay = sum?.plays?.[0];
   const inj = sum?.liveInjuries?.[0];
   const top = `<div class="vs">${side(g.away)}<div class="mid">${mid}</div>${side(g.home)}</div>${wp}`;
-  const playHTML = `<div class="k">${live ? 'Latest play' : 'Final play'} <span>${lastPlay ? esc(`${lastPlay.periodLabel || ''} ${lastPlay.clock}`) : ''}</span></div><div class="pop-in">${lastPlay ? actorsHTML(lastPlay, { compact: true }) : esc(g.lastPlay || 'Waiting for the first play')}</div>`;
+  const playHTML = `<div class="k">${live ? 'Latest play' : 'Final play'} <span>${lastPlay ? esc(`${lastPlay.periodLabel || ''} ${lastPlay.clock}`) : ''}</span></div><div class="pop-in">${lastPlay ? playAnim(lastPlay, g.league) + actorsHTML(lastPlay, { compact: true }) : esc(g.lastPlay || 'Waiting for the first play')}</div>`;
   const injHTML = `<div class="k">Latest injury <span>${inj ? esc(`${inj.periodLabel || ''} ${inj.clock}`) : ''}</span></div><div class="pop-in">${inj ? (inj.injured?.length ? injuredHTML(inj) : esc(inj.text)) : 'No in-game injuries reported so far.'}</div>`;
   // Build the frame once per game, then only swap the parts that changed so nothing flickers.
   const key = `${g.id}:${live || post ? 1 : 0}`;
@@ -860,6 +860,24 @@ function actorsHTML(p, { compact = false } = {}) {
 const injuredHTML = (p) => (p.injured || []).map((x) => `<div class="actor sm injr ${x.returned ? 'back' : ''}">${pface(x, 'ph')}<div><span class="an">${esc(x.name)}</span> <span class="al">${x.returned ? '✅ back in the game' : '🚑 hurt on the play'}</span></div></div>`).join('');
 const playShort = (p) => (p?.who?.[0] ? `${p.who[0].name}: ${p.who[0].line}${p.defense?.[0] ? ` (${p.defense[0].line.toLowerCase()} by ${p.defense[0].name})` : ''}` : p?.text || '');
 const injShort = (p) => (p?.injured?.length ? p.injured.map((x) => `${x.name} (${x.team}) ${x.returned ? 'is back in the game' : 'got hurt'}`).join(' · ') : p?.text || '');
+// A short one-time animation for a new play: ball flying for a pass, a runner for a run.
+// Pure CSS transforms, only on plays that just came in, so it stays smooth.
+function playKind(p) {
+  const t = `${p.type || ''} ${p.who?.[0]?.line || ''} ${p.text || ''}`;
+  if (/sack/i.test(t)) return 'sack';
+  if (/field goal|extra point|punt|kickoff|kick/i.test(t)) return 'kick';
+  if (/pass|catch|reception|incomplete|intercept|threw/i.test(t)) return 'pass';
+  if (/run|rush|scramble|kneel/i.test(t)) return 'run';
+  return '';
+}
+function playAnim(p, league) {
+  if (league && league !== 'nfl' && league !== 'cfb') return '';
+  const k = playKind(p);
+  if (!k) return '';
+  const td = p.scoring || /touchdown|\bTD\b/i.test(`${p.text} ${p.who?.[0]?.line || ''}`);
+  const icon = k === 'run' ? '<b class="runner">🏃</b>' : k === 'sack' ? '<b class="boom">💥</b>' : '<b class="ball">🏈</b>';
+  return `<div class="panim ${k}" aria-hidden="true"><span class="lane"><span class="mover">${icon}</span></span>${td ? '<span class="tdpop">🎉 TD</span>' : ''}</div>`;
+}
 function agoText(iso) {
   const ms = Date.now() - new Date(iso);
   if (!iso || !(ms >= 0)) return '';
@@ -884,7 +902,7 @@ function playRow(p, g) {
   for (const x of def) sub.push(`<div class="fl2">${pface(x, 'mini')}<span class="fr">${esc(x.line)}:</span> ${esc(x.name)}${x.total ? ` · ${esc(x.total)}` : ''}</div>`);
   if (!m && !p.injured?.length) sub.push(`<div class="fl2">${esc(p.text)}</div>`);
   for (const x of p.injured || []) sub.push(`<div class="fl2 ${x.returned ? 'back' : 'hurt'}">${pface(x, 'mini')}${x.returned ? '✅' : '🚑'} ${esc(x.name)} ${x.returned ? 'back in the game' : 'hurt on the play'}</div>`);
-  return `<div class="play feedp ${cls}">${av}<div class="pbody"><div class="fmeta"><span>${meta}${p.wall ? ` · <span data-ago="${esc(p.wall)}">${agoText(p.wall)}</span>` : ''}</span>${swing}</div><div class="fhead">${esc(head)}${p.voided ? ' <span class="est">no play</span>' : ''}</div>${sub.join('')}</div></div>`;
+  return `<div class="play feedp ${cls}">${av}<div class="pbody">${playAnim(p, g?.league)}<div class="fmeta"><span>${meta}${p.wall ? ` · <span data-ago="${esc(p.wall)}">${agoText(p.wall)}</span>` : ''}</span>${swing}</div><div class="fhead">${esc(head)}${p.voided ? ' <span class="est">no play</span>' : ''}</div>${sub.join('')}</div></div>`;
 }
 
 // ---------- PAST GAMES / SEASONS ----------
