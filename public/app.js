@@ -226,6 +226,7 @@ function gamePicks(g, sum, nA, nH) {
     const bad = hurt.has(x.player) || out.has(x.player);
     list.push({ id: `${g.id}:prop:${x.player}:${x.stat}`, gameId: g.id, league: g.league, game: label, kind: 'prop', pick: `${x.player} ${x.lean} ${x.line} ${String(x.stat).toLowerCase()}`, est: x.est, odds: x.odds || -115, why: x.why, bad });
   }
+  list.sort((a, b) => (b.bad ? -99 : b.est - breakEven(b.odds)) - (a.bad ? -99 : a.est - breakEven(a.odds)));
   return { e, list };
 }
 
@@ -344,6 +345,7 @@ function renderGames() {
   const v = $('#view');
   v.innerHTML = `
     ${viewSwitch('today')}
+    <div id="myOpen"></div>
     <div id="tickerWrap"></div>
     <div class="chips" id="chips" role="group" aria-label="Sport">
       ${['all', ...ALL_LEAGUES].map((k) => `<button data-filter="${k}" aria-pressed="${S.filter === k}">${k === 'all' ? 'All sports' : LG[k].label}</button>`).join('')}
@@ -394,6 +396,8 @@ function syncFeed(feed, plays, g) {
 
 function renderGamesBody() {
   if (!$('#lists')) return;
+  { const open = (S.bets || []).filter((b) => b.status === 'pending');
+    setHTML($('#myOpen'), open.length ? `<div class="myopen"><div class="hd"><h3>Your open bets</h3><a href="#/bets" class="est">See all ›</a></div><div class="strip">${open.slice(0, 8).map((b) => { const bc = betChance(b); const pc = bc ? Math.round(bc.p * 100) : null; return `<button class="ob" data-openbet="${esc(b.id)}"><span class="obt">${esc(betLegs(b).length > 1 ? betLegs(b).length + '-leg parlay' : betLegs(b)[0]?.pick || b.desc)}</span><span class="obp ${pc === null ? '' : pc >= 60 ? 'good' : pc >= 35 ? 'mid' : 'bad'}">${pc === null ? '—' : pctTxt(bc.p)}</span><span class="obs">${bc?.live ? '🔴 live chance' : 'to hit'} · $${esc(b.stake)}</span></button>`; }).join('')}</div></div>` : ''); }
   const shown = S.games.filter((g) => S.filter === 'all' || g.league === S.filter);
   const live = shown.filter((g) => g.state === 'in');
 
@@ -498,10 +502,10 @@ async function renderGamePick(r) {
   const label = g.state === 'pre' ? 'Picks for this game' : g.state === 'in' ? 'Picks · updated live' : 'Pre-game picks';
   const inSlip = new Set((S.slip || []).map((x) => x.id));
   const slides = list.map((p, k) => `<div class="pslide">
-      <div class="pk"><span>${kindLabel[p.kind]}${k === 0 ? ' · top pick' : ''}</span><span class="grade g${p.bad ? 'F' : gradeOf(p.est, p.odds)}">${p.bad ? 'F' : gradeOf(p.est, p.odds)}</span></div>
+      <div class="pk"><span>${kindLabel[p.kind]}${k === 0 ? ' · best pick' : ''}</span><span class="grade g${p.bad ? 'F' : gradeOf(p.est, p.odds)}">${p.bad ? 'F' : gradeOf(p.est, p.odds)}</span></div>
       <div class="p ${p.bad ? 'struck' : ''}">${esc(p.pick)}</div>
       <div class="pm"><span class="tag t-pick">${p.est}% estimated</span>${p.odds ? `<span class="est">${esc(ml(p.odds))}</span>` : ''}</div>
-      ${k === 0 && changed ? `<div class="chg">🔄 Changed after an injury · was ${esc(base.top.pick)}</div>` : ''}
+      ${changed && p.pick === e.top?.pick ? `<div class="chg">🔄 Changed after an injury · was ${esc(base.top.pick)}</div>` : ''}
       <p class="pw">${p.bad ? '⚠️ Hurt or ruled out, skip this one.' : esc(p.why || '')}</p>
       ${p.bad || g.state === 'post' ? '' : `<button class="addleg ${inSlip.has(p.id) ? 'on' : ''}" data-addleg="${esc(p.id)}">${inSlip.has(p.id) ? '✓ In your parlay' : '+ Add to parlay'}</button>`}
     </div>`).join('');
@@ -1138,13 +1142,30 @@ function drawBets() {
 
   const localCount = Bets.local().length;
   el.innerHTML = `
-    <div class="seg" style="margin-bottom:12px">${['week', 'month', 'year', 'all'].map((p) => `<button data-period="${p}" aria-pressed="${S.period === p}">${p === 'all' ? 'All time' : 'This ' + p}</button>`).join('')}</div>
+    <div class="seg" style="margin-bottom:12px">${['week', 'month', 'year', 'all'].map((p) => `<button data-period="${p}" aria-pressed="${S.period === p}">${p === 'all' ? 'All' : p[0].toUpperCase() + p.slice(1)}</button>`).join('')}</div>
     <div class="zone">
       <div class="verd ${zone}"><div class="zl">${zone === 'up' ? "You're up" : zone === 'down' ? "You're down" : 'Even'}</div><div class="bn">${money(net)}</div>
         <div class="kpis"><div>Record<b>${w}-${l}${pu ? '-' + pu : ''}</b></div><div>Win rate<b>${w + l ? Math.round((w / (w + l)) * 100) : 0}%</b></div><div>Return<b>${staked ? Math.round((net / staked) * 100) : 0}%</b></div><div>Pending<b>${pending.length}</b></div></div></div>
       <div class="chart"><div class="est">Bars: profit or loss per ${S.period === 'year' || S.period === 'all' ? 'month' : 'day'}. Line: running total.</div>${svg}</div>
     </div>
+    ${(() => {
+      const row = (b) => `
+      <div class="betrow"><div><button class="ds dsbtn" data-openbet="${esc(b.id)}">${esc(b.desc)} <span class="open">›</span></button>${b.status === 'pending' ? `<div class="lc" data-lc="${esc(b.id)}">${liveChanceText(b)}</div>` : ''}<div class="mt">${esc(b.date)} · ${esc(b.app)} · ${esc(b.sport)} · ${b.odds ? esc(ml(Number(b.odds))) + ' · ' : ''}$${esc(b.stake)}</div>
+        <div style="display:flex;gap:6px;margin-top:6px"><select data-status="${esc(b.id)}" aria-label="Result">${['pending', 'won', 'lost', 'push', 'cashout'].map((s) => `<option value="${s}" ${b.status === s ? 'selected' : ''}>${s === 'cashout' ? 'Cashed out' : s[0].toUpperCase() + s.slice(1)}</option>`).join('')}</select><button class="ghost" style="min-height:36px;padding:4px 8px" data-del="${esc(b.id)}">Delete</button></div></div>
+        <div class="pl ${profit(b) > 0 ? 'pos' : profit(b) < 0 ? 'neg' : ''}">${b.status === 'pending' ? '<span class="tag">Open</span>' : money(profit(b))}</div></div>`;
+      const sorted = S.bets.slice().sort((a, b) => String(b.date).localeCompare(String(a.date)));
+      const open = sorted.filter((b) => b.status === 'pending');
+      const done = sorted.filter((b) => b.status !== 'pending');
+      return `
+    <h2>Open bets <span class="count">${open.length}</span></h2>
+    <div style="display:grid;gap:8px">${open.length ? open.map(row).join('') : '<div class="empty">No open bets. Add one below.</div>'}</div>
     <h2>Add a bet</h2>
+    <div class="addways">
+      <a class="addway" href="#/check"><span>📸</span><b>Scan a slip</b><small>AI fills it in</small></a>
+      <a class="addway" href="#/builder"><span>🧱</span><b>Build a parlay</b><small>From today's picks</small></a>
+      <button class="addway" data-typebet><span>✍️</span><b>Type it in</b><small>Any bet</small></button>
+    </div>
+    <div id="typeBet" ${S.typeBet ? '' : 'hidden'}>
     <form class="bet sec" id="betForm">
       <label class="wide">What did you bet?<input name="desc" required maxlength="200" placeholder="e.g. Lions +1.5 or Amon-Ra over 80.5 rec yds"></label>
       <label>App<select name="app"><option>DraftKings</option><option>PrizePicks</option><option>FanDuel</option><option>Other</option></select></label>
@@ -1156,13 +1177,11 @@ function drawBets() {
       <label>Result<select name="status"><option value="pending">Pending</option><option value="won">Won</option><option value="lost">Lost</option><option value="push">Push</option><option value="cashout">Cashed out</option></select></label>
       <button class="pri wide" type="submit">Save bet</button>
     </form>
-    <div class="note">${S.betsMode === 'cloud' ? '☁️ Saved to your free database, so you see the same bets on any device.' : '📱 Saved on this device only. Connect the free database (see the setup guide) to see bets on every device.'}</div>
-    ${S.betsMode === 'cloud' && localCount ? `<button style="margin-top:8px" data-migrate>Move ${localCount} bets from this phone to the cloud</button>` : ''}
-    <h2>Your bets <span class="count">${S.bets.length}</span></h2>
-    <div style="display:grid;gap:8px">${S.bets.length ? S.bets.slice().sort((a, b) => String(b.date).localeCompare(String(a.date))).map((b) => `
-      <div class="betrow"><div><button class="ds dsbtn" data-openbet="${esc(b.id)}">${esc(b.desc)} <span class="open">›</span></button>${b.status === 'pending' ? `<div class="lc" data-lc="${esc(b.id)}">${liveChanceText(b)}</div>` : ''}<div class="mt">${esc(b.date)} · ${esc(b.app)} · ${esc(b.sport)} · ${b.odds ? esc(ml(Number(b.odds))) + ' · ' : ''}$${esc(b.stake)}</div>
-        <div style="display:flex;gap:6px;margin-top:6px"><select data-status="${esc(b.id)}" aria-label="Result">${['pending', 'won', 'lost', 'push', 'cashout'].map((s) => `<option value="${s}" ${b.status === s ? 'selected' : ''}>${s === 'cashout' ? 'Cashed out' : s[0].toUpperCase() + s.slice(1)}</option>`).join('')}</select><button class="ghost" style="min-height:36px;padding:4px 8px" data-del="${esc(b.id)}">Delete</button></div></div>
-        <div class="pl ${profit(b) > 0 ? 'pos' : profit(b) < 0 ? 'neg' : ''}">${b.status === 'pending' ? '<span class="tag">Pending</span>' : money(profit(b))}</div></div>`).join('') : '<div class="empty">No bets yet. Add your first one above.</div>'}</div>`;
+    </div>
+    ${done.length ? `<h2>Settled <span class="count">${done.length}</span></h2><div style="display:grid;gap:8px">${done.map(row).join('')}</div>` : ''}
+    <div class="note" style="margin-top:14px">${S.betsMode === 'cloud' ? '☁️ Saved to your free database, so you see the same bets on any device.' : '📱 Saved on this phone.'}</div>
+    ${S.betsMode === 'cloud' && localCount ? `<button style="margin-top:8px" data-migrate>Move ${localCount} bets from this phone to the cloud</button>` : ''}`;
+    })()}`;
 }
 
 // ---------- AI CHECK ----------
@@ -1595,8 +1614,7 @@ function openBet(id, again = false) {
       ${gr ? `<span class="grade g${esc(gr)}">${esc(gr)}</span>` : l.call ? `<span class="call ${esc(l.call)}">${esc(l.call.toUpperCase())}</span>` : (l.tried ? '<span class="grade gwait">–</span>' : '<span class="grade gwait">…</span>')}
       <div><b>${esc(l.pick)}</b><small>${esc([l.game || (g ? `${g.away.abbr} @ ${g.home.abbr}` : ''), l.est ? `${l.est}% estimated` : '', l.odds ? ml(Number(l.odds)) : ''].filter(Boolean).join(' · '))}</small>
       ${score ? `<small class="sc">${esc(score)}</small>` : ''}${l.why ? `<small>${esc(l.why)}</small>` : ''}</div>
-      ${st || legChance(l, g) !== null ? `<div class="lrow">${st ? `<span class="lst ${st.cls}">${esc(st.text)}</span>` : ''}${legChance(l, g) !== null && !(g && g.state === 'post') ? `<span class="lpct">${pctTxt(legChance(l, g))} to hit</span>` : ''}</div>` : ''}
-      ${g ? `<button class="ghost golink" data-go="${esc(g.league)}/${esc(g.id)}">Game ›</button>` : ''}
+      ${st || legChance(l, g) !== null ? `<div class="lrow">${st ? `<span class="lst ${st.cls}">${esc(st.text)}</span>` : ''}${legChance(l, g) !== null && !(g && g.state === 'post') ? `<span class="lpct">${pctTxt(legChance(l, g))} to hit</span>` : ''}${g ? `<button class="ghost golink" data-go="${esc(g.league)}/${esc(g.id)}">Game ›</button>` : ''}</div>` : ''}
     </div>`;
   }).join('');
   const pay = b.payout || (b.odds ? Math.round(b.stake * decOdds(b.odds) * 100) / 100 : null);
@@ -1654,6 +1672,7 @@ document.addEventListener('click', async (e) => {
   if (t.dataset.pseason) { $('#sheet')._season(t.dataset.pseason); return; }
   if (t.dataset.stat) { $('#sheet')._redraw((s) => { s.stat = t.dataset.stat; s.line = null; }); return; }
   if (t.dataset.line) { $('#sheet')._redraw((s) => { s.line = Math.max(0.5, s.line + Number(t.dataset.line)); }); return; }
+  if (t.hasAttribute('data-typebet')) { S.typeBet = !S.typeBet; const el = $('#typeBet'); if (el) { el.hidden = !S.typeBet; if (S.typeBet) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); } return; }
   if (t.dataset.openbet) { openBet(t.dataset.openbet); return; }
   if (t.dataset.addleg) {
     if (!S.slip.length) S.slip = store.get('slip', []);
@@ -1740,6 +1759,7 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 window.addEventListener('hashchange', render);
 (async () => {
   render();
+  Bets.load().then(() => { if (route().name === 'games') renderGamesBody(); }).catch((e) => console.warn('open bets strip', e));
   await loadDaily();
   loadScoreboard();
 })();
