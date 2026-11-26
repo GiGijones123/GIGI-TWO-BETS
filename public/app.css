@@ -411,3 +411,4 @@ input, select { font: inherit; font-size: 16px; padding: 9px 10px; border: 1px s
 .seg.pf button:disabled { opacity: .4; }
 .seg.pf .count { font-size: 12px; background: var(--s2); color: var(--mute); padding: 2px 7px; border-radius: 99px; }
 .seg.pf button { white-space: nowrap; }
+.tag.live-hurt { animation: blink 1.6s ease-in-out 3; }

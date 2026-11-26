@@ -487,6 +487,7 @@ function pollGame(r) {
     if (route().id !== r.id) return;
     renderGameLive(r);
     renderGamePick(r);
+    { const gg = S.games.find((x) => x.id === r.id) || S.sums[r.id]?.data?.game; if (gg) setHTML($('#whoMissing'), missingHTML(gg, S.sums[r.id]?.data)); }
     if (S.gameTab === 'plays' && S.sums[r.id]?.data?.plays?.[0]?.id !== before) renderGameBody(r);
     pollGame(r);
   }, live ? 8e3 : 60e3);
@@ -570,6 +571,26 @@ function styleBar(t, n, L) {
   return '';
 }
 
+// Who's missing: players hurt during this game first (updates live), then the pre-game injury report.
+function missingHTML(g, sum) {
+  const latest = new Map();
+  for (const p of sum?.liveInjuries || []) for (const x of p.injured || []) { const k = String(x.id || x.name); if (!latest.has(k)) latest.set(k, { ...x, when: `${p.periodLabel || (p.period ? 'Q' + p.period : '')} ${p.clock}`.trim() }); }
+  const live = [...latest.values()];
+  const tagCls = (st) => (/out|injured reserve|\bir\b|doubt|susp|pup/i.test(st) ? 't-out' : /quest|day/i.test(st) ? 't-q' : 't-ok');
+  const row = (img, name, pos, detail, tag, cls) => `<div class="ip">${img ? `<img src="${esc(img)}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">` : '<span class="ph"></span>'}<div><div class="nm">${esc(name)} ${pos ? `<span class="est">${esc(pos)}</span>` : ''}</div>${detail ? `<div class="dt">${esc(detail)}</div>` : ''}</div><span class="tag ${cls}">${esc(tag)}</span></div>`;
+  const team = (t) => {
+    const hurt = live.filter((x) => x.team === t.abbr);
+    const names = new Set(hurt.map((x) => x.name));
+    const list = (sum?.injuries?.[t.id] || []).filter((i) => !names.has(i.name));
+    const rows = [
+      ...hurt.map((x) => row(x.headshot, x.name, '', x.returned ? `Hurt earlier, back in the game` : `Hurt during the game${x.when ? ' · ' + x.when : ''}`, x.returned ? 'Back in' : 'Hurt in game', x.returned ? 't-ok' : 't-out live-hurt')),
+      ...list.slice(0, 12).map((i) => row(i.headshot, i.name, i.pos, i.detail, i.status, tagCls(i.status))),
+    ];
+    return `<div class="tn" style="font-size:18px;margin-bottom:6px">${esc(t.name)}</div>${rows.length ? `<div class="inj">${rows.join('')}</div>` : '<div class="est">No injuries listed.</div>'}`;
+  };
+  return `<div class="hd"><h3>Who's missing</h3>${g.state === 'in' ? '<span class="est">updates live</span>' : ''}</div><div class="grid2"><div>${team(g.away)}</div><div>${team(g.home)}</div></div>`;
+}
+
 function renderMatchup(body, g, sum, tA, tH) {
   const L = LG[g.league];
   const nA = tA?.numbers; const nH = tH?.numbers;
@@ -586,11 +607,6 @@ function renderMatchup(body, g, sum, tA, tH) {
     if (Math.abs(off) < tol && Math.abs(def) < tol) verdict = 'These two are about even';
     else verdict = `${Math.abs(off) < tol ? 'Even on offense' : `${off > 0 ? g.away.name : g.home.name} have the better offense`}. ${Math.abs(def) < tol ? 'Even on defense' : `${def > 0 ? g.away.name : g.home.name} have the better defense`}.`;
   }
-  const inj = (t) => {
-    const list = sum?.injuries?.[t.id] || [];
-    if (!list.length) return `<div class="est">No injuries listed.</div>`;
-    return `<div class="inj">${list.slice(0, 12).map((i) => `<div class="ip">${i.headshot ? `<img src="${esc(i.headshot)}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">` : '<span class="ph"></span>'}<div><div class="nm">${esc(i.name)} <span class="est">${esc(i.pos)}</span></div><div class="dt">${esc(i.detail || '')}</div></div><span class="tag ${/out|ir|doubt|susp/i.test(i.status) ? 't-out' : /quest|day/i.test(i.status) ? 't-q' : 't-ok'}">${esc(i.status)}</span></div>`).join('')}</div>`;
-  };
   const form = (t) => {
     const l = sum?.lastFive?.[t.id] || [];
     return l.length ? `<div class="form" title="Last 5">${l.map((x) => `<i class="${esc(x.result)}" title="${esc(x.atVs)} ${esc(x.opp)} ${esc(x.score)}">${esc(x.result)}</i>`).join('')}</div>` : '';
@@ -614,7 +630,7 @@ function renderMatchup(body, g, sum, tA, tH) {
       ${!nA && !nH ? '<div class="est">Season numbers are not available right now.</div>' : ''}
       <div class="grid2" style="align-items:center"><div class="est">${esc(g.away.abbr)} last 5</div>${form(g.away) || '<span class="est">—</span>'}<div class="est">${esc(g.home.abbr)} last 5</div>${form(g.home) || '<span class="est">—</span>'}</div>
     </div>
-    <div class="sec"><h3>Who's missing</h3><div class="grid2"><div><div class="tn" style="font-size:18px;margin-bottom:6px">${esc(g.away.name)}</div>${inj(g.away)}</div><div><div class="tn" style="font-size:18px;margin-bottom:6px">${esc(g.home.name)}</div>${inj(g.home)}</div></div></div>
+    <div class="sec" id="whoMissing">${missingHTML(g, sum)}</div>
     ${sum?.teamBox?.length && g.state !== 'pre' ? `<div class="sec"><h3>Team stats today</h3><div class="scroll"><table><thead><tr><th></th><th class="n">${esc(sum.teamBox[0]?.abbr)}</th><th class="n">${esc(sum.teamBox[1]?.abbr)}</th></tr></thead><tbody>${(sum.teamBox[0]?.stats || []).slice(0, 14).map((s, i) => `<tr><td>${esc(s.label)}</td><td class="n">${esc(s.value)}</td><td class="n">${esc(sum.teamBox[1]?.stats?.[i]?.value ?? '')}</td></tr>`).join('')}</tbody></table></div></div>` : ''}
   `;
 }
