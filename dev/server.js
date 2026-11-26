@@ -43,4 +43,4 @@ http.createServer(async (req, res) => {
     res.statusCode = 404;
     res.end('Not found');
   }
-}).listen(PORT, () => console.log(`Bets Daily on http://localhost:${PORT}`));
+}).listen(PORT, () => console.log(`GIGI Picks on http://localhost:${PORT}`));

@@ -1,4 +1,4 @@
-# Bets Daily
+# GIGI Picks
 
 Live scores, play by play, lineups, odds and estimated picks for the NFL, NBA, college football and the NHL.
 

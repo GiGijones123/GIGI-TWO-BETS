@@ -1,4 +1,4 @@
-/* Bets Daily v2 — "neon game night": deep indigo, lime, hot pink, cyan.
+/* GIGI Picks — "neon game night": deep indigo, lime, hot pink, cyan.
    Chunky condensed display type, big tap targets, phone first. */
 :root {
   color-scheme: dark;
@@ -26,10 +26,18 @@ a { color: var(--cyan); }
 
 /* header */
 header.top { position: sticky; top: 0; z-index: 20; background: color-mix(in srgb, var(--bg2) 88%, transparent); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border-bottom: 1px solid var(--line); padding-top: env(safe-area-inset-top); }
-.bar { display: flex; align-items: center; gap: 12px; height: 58px; }
-.brand { display: flex; align-items: center; gap: 10px; text-decoration: none; color: var(--ink); font: italic 900 26px/1 var(--disp); letter-spacing: .01em; }
+.bar { display: flex; align-items: center; gap: 12px; height: 68px; }
+.brand { display: flex; align-items: center; gap: 10px; text-decoration: none; color: var(--ink); font: italic 900 32px/1 var(--disp); letter-spacing: .01em; }
+.brand .wm { display: flex; gap: 6px; }
 .brand b { color: var(--lime); }
-.logo { width: 34px; height: 34px; border-radius: 10px; background: var(--lime); color: var(--bg); display: grid; place-items: center; font: 900 22px/1 var(--disp); transform: rotate(-6deg); box-shadow: 0 0 18px #b6ff3b66; }
+.logo { width: 50px; height: 50px; border-radius: 14px; filter: drop-shadow(0 0 14px #b6ff3b66); }
+/* big brand banner on the Games page */
+.hero-brand { position: relative; overflow: hidden; display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 16px; padding: 18px; margin: 4px 0 14px; border-radius: 28px; border: 1px solid #b6ff3b55; background: radial-gradient(400px 200px at 0% 0%, #b6ff3b33, transparent 70%), radial-gradient(400px 220px at 100% 100%, #ff3d8b33, transparent 70%), linear-gradient(135deg, #1d1648, #120d33); }
+.hero-brand::after { content: ""; position: absolute; inset: 0; background: repeating-linear-gradient(-12deg, transparent 0 26px, #ffffff08 26px 30px); pointer-events: none; }
+.hero-brand img { width: clamp(88px, 26vw, 130px); height: auto; filter: drop-shadow(0 0 24px #b6ff3b77); transform: rotate(-4deg); }
+.hero-brand .name { font: italic 900 clamp(50px, 15vw, 92px)/.85 var(--disp); text-transform: uppercase; letter-spacing: .01em; margin: 0; text-shadow: 0 4px 0 #0007; }
+.hero-brand .name b { display: block; color: var(--lime); }
+.hero-brand .tagline { margin-top: 8px; font-weight: 800; font-size: 14px; color: var(--mute); letter-spacing: .06em; text-transform: uppercase; }
 .pulse { margin-left: auto; display: inline-flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 700; color: var(--mute); background: var(--s1); padding: 6px 11px; border-radius: 99px; }
 .pulse i { width: 8px; height: 8px; border-radius: 50%; background: var(--dim); }
 .pulse.on i { background: var(--win); box-shadow: 0 0 0 0 #34e39a99; animation: ping 2s infinite; }
@@ -140,7 +148,7 @@ button.ghost { background: transparent; color: var(--mute); }
 .lb .k { font-size: 12px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; color: var(--pink); display: flex; justify-content: space-between; gap: 8px; }
 .lb.inj .k { color: var(--loss); }
 .lb .k span { color: var(--dim); font-weight: 700; text-transform: none; letter-spacing: 0; }
-.stick { position: sticky; top: calc(58px + env(safe-area-inset-top)); z-index: 10; padding: 10px 0; background: linear-gradient(var(--bg) 70%, transparent); }
+.stick { position: sticky; top: calc(68px + env(safe-area-inset-top)); z-index: 10; padding: 10px 0; background: linear-gradient(var(--bg) 70%, transparent); }
 .sec { background: var(--s1); border: 1px solid var(--line); border-radius: var(--r); padding: 16px; display: grid; gap: 12px; margin-bottom: 12px; }
 .sec > .hd { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 .pickcard { background: linear-gradient(135deg, #b6ff3b22, #36e2ff14); border-color: #b6ff3b66; }

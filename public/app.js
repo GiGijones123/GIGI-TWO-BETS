@@ -1,4 +1,4 @@
-// Bets Daily v2 — live site. Plain JavaScript, no build step.
+// GIGI Picks — live site. Plain JavaScript, no build step.
 // Data comes from our own /api/* routes, which read ESPN's free public feeds.
 
 const $ = (s, r = document) => r.querySelector(s);
@@ -272,7 +272,7 @@ function renderGames() {
   const v = $('#view');
   const today = new Date().toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' });
   v.innerHTML = `
-    <h1>Game day</h1>
+    <div class="hero-brand"><img src="/icon.svg" alt=""><div><h1 class="name">GIGI<b>PICKS</b></h1><div class="tagline">Live picks · every play</div></div></div>
     <p class="sub">${esc(today)}. Scores, clocks and plays update on their own.</p>
     ${viewSwitch('today')}
     <div id="tickerWrap"></div>
