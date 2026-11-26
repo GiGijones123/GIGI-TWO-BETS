@@ -755,10 +755,10 @@ function playRow(p, g) {
   const head = m ? m.line : p.type || 'Play';
   const sub = [];
   if (m) sub.push(`<div class="fl1"><b>${esc(m.name)}</b>${m.total ? ` · ${esc(m.total)}` : ''}</div>`);
-  for (const x of rest) sub.push(`<div class="fl2">${esc(x.name)}${x.total ? ` · ${esc(x.total)}` : ''} <span class="fr">${esc(x.line)}</span></div>`);
-  for (const x of def) sub.push(`<div class="fl2"><span class="fr">${esc(x.line)}:</span> ${esc(x.name)}${x.total ? ` · ${esc(x.total)}` : ''}</div>`);
+  for (const x of rest) sub.push(`<div class="fl2">${pface(x, 'mini')}${esc(x.name)}${x.total ? ` · ${esc(x.total)}` : ''} <span class="fr">${esc(x.line)}</span></div>`);
+  for (const x of def) sub.push(`<div class="fl2">${pface(x, 'mini')}<span class="fr">${esc(x.line)}:</span> ${esc(x.name)}${x.total ? ` · ${esc(x.total)}` : ''}</div>`);
   if (!m && !p.injured?.length) sub.push(`<div class="fl2">${esc(p.text)}</div>`);
-  for (const x of p.injured || []) sub.push(`<div class="fl2 ${x.returned ? 'back' : 'hurt'}">${x.returned ? '✅' : '🚑'} ${esc(x.name)} ${x.returned ? 'back in the game' : 'hurt on the play'}</div>`);
+  for (const x of p.injured || []) sub.push(`<div class="fl2 ${x.returned ? 'back' : 'hurt'}">${pface(x, 'mini')}${x.returned ? '✅' : '🚑'} ${esc(x.name)} ${x.returned ? 'back in the game' : 'hurt on the play'}</div>`);
   return `<div class="play feedp ${cls}">${av}<div class="pbody"><div class="fmeta"><span>${meta}${p.wall ? ` · <span data-ago="${esc(p.wall)}">${agoText(p.wall)}</span>` : ''}</span>${swing}</div><div class="fhead">${esc(head)}${p.voided ? ' <span class="est">no play</span>' : ''}</div>${sub.join('')}</div></div>`;
 }
 

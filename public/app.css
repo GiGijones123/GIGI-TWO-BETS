@@ -403,3 +403,7 @@ input, select { font: inherit; font-size: 16px; padding: 9px 10px; border: 1px s
 .fl2.hurt { color: #ff9aab; } .fl2.back { color: var(--win); }
 .livebox { cursor: pointer; }
 .seeall { text-align: right; font-size: 13px; font-weight: 800; color: var(--cyan); padding: 0 4px; }
+.fl2 { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.mini { position: relative; width: 28px; height: 28px; border-radius: 50%; overflow: hidden; background: var(--s3); display: inline-grid; place-items: center; flex: none; }
+.mini img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: top; }
+.mini i { font: 800 10px/1 var(--disp); font-style: normal; color: #fff9; }
