@@ -472,3 +472,21 @@ input, select { font: inherit; font-size: 16px; padding: 9px 10px; border: 1px s
 .bpick .plus { font: 800 22px/1 var(--disp); color: var(--lime); width: 34px; height: 34px; border-radius: 99px; display: grid; place-items: center; background: var(--s2); }
 .bpick.on { border-color: var(--lime); background: color-mix(in srgb, var(--lime) 10%, var(--s1)); }
 .bpick.on .plus { background: var(--lime); color: var(--bg); }
+
+/* open a bet */
+.dsbtn { display: block; width: 100%; text-align: left; background: none; padding: 0; min-height: 0; color: var(--ink); font-size: 16px; font-weight: 800; justify-content: start; }
+.dsbtn .open { color: var(--lime); font-size: 20px; }
+.obhead { display: grid; grid-template-columns: auto 1fr auto; gap: 12px; align-items: center; padding-top: 6px; }
+.obhead h3 { font-size: 24px; }
+.oblegs { display: grid; gap: 8px; }
+.obleg { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; align-items: start; background: var(--bg2); border-radius: 16px; padding: 12px; border-left: 4px solid var(--s3); }
+.obleg b { display: block; font-size: 17px; }
+.obleg small { display: block; color: var(--mute); font-size: 13px; margin-top: 2px; }
+.obleg small.sc { color: var(--ink); font-weight: 700; }
+.obleg .lst, .obleg .golink { grid-column: 2; justify-self: start; }
+.lst { font-size: 13px; font-weight: 800; padding: 4px 10px; border-radius: 99px; background: var(--s2); color: var(--mute); }
+.lst.win { background: #34e39a; color: #04210f; } .lst.lose { background: #ff4d6a; color: #fff; } .lst.push { background: var(--warn); color: #241400; }
+.obleg.win { border-left-color: #34e39a; } .obleg.lose { border-left-color: #ff4d6a; } .obleg.push { border-left-color: var(--warn); }
+.golink { min-height: 32px; padding: 4px 10px; font-size: 13px; }
+.slipbet .appsel { grid-column: 1 / -1; }
+.slipbet select { font: inherit; font-weight: 800; color: var(--ink); background: var(--bg2); border: 1px solid var(--line); border-radius: 12px; padding: 8px 10px; }

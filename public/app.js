@@ -1157,7 +1157,7 @@ function drawBets() {
     ${S.betsMode === 'cloud' && localCount ? `<button style="margin-top:8px" data-migrate>Move ${localCount} bets from this phone to the cloud</button>` : ''}
     <h2>Your bets <span class="count">${S.bets.length}</span></h2>
     <div style="display:grid;gap:8px">${S.bets.length ? S.bets.slice().sort((a, b) => String(b.date).localeCompare(String(a.date))).map((b) => `
-      <div class="betrow"><div><div class="ds">${esc(b.desc)}</div><div class="mt">${esc(b.date)} · ${esc(b.app)} · ${esc(b.sport)} · ${b.odds ? esc(ml(Number(b.odds))) + ' · ' : ''}$${esc(b.stake)}</div>
+      <div class="betrow"><div><button class="ds dsbtn" data-openbet="${esc(b.id)}">${esc(b.desc)} <span class="open">›</span></button><div class="mt">${esc(b.date)} · ${esc(b.app)} · ${esc(b.sport)} · ${b.odds ? esc(ml(Number(b.odds))) + ' · ' : ''}$${esc(b.stake)}</div>
         <div style="display:flex;gap:6px;margin-top:6px"><select data-status="${esc(b.id)}" aria-label="Result">${['pending', 'won', 'lost', 'push', 'cashout'].map((s) => `<option value="${s}" ${b.status === s ? 'selected' : ''}>${s === 'cashout' ? 'Cashed out' : s[0].toUpperCase() + s.slice(1)}</option>`).join('')}</select><button class="ghost" style="min-height:36px;padding:4px 8px" data-del="${esc(b.id)}">Delete</button></div></div>
         <div class="pl ${profit(b) > 0 ? 'pos' : profit(b) < 0 ? 'neg' : ''}">${b.status === 'pending' ? '<span class="tag">Pending</span>' : money(profit(b))}</div></div>`).join('') : '<div class="empty">No bets yet. Add your first one above.</div>'}</div>`;
 }
@@ -1367,7 +1367,7 @@ function drawSlip() {
     <div class="slipgrade"><span class="grade big g${pg.grade}">${pg.grade}</span><div><b>${legs.length === 1 ? 'Straight bet' : `${legs.length}-leg parlay`} · ${esc(ml(pg.am))}</b><small>About ${pg.chance < 1 ? '<1' : Math.round(pg.chance)}% chance to hit (estimate)</small></div></div>
     <div class="legs">${legs.map((x) => { const gr = gradeOf(x.est, x.odds); return `<div class="leg"><span class="grade g${gr}">${gr}</span><div><b>${esc(x.pick)}</b><small>${esc(x.game)} · ${x.est}% · ${esc(ml(x.odds))}</small></div><button class="ghost x" data-addleg="${esc(x.id)}" aria-label="Remove">✕</button></div>`; }).join('')}</div>
     <ul class="tips">${pg.notes.map((n) => `<li>${esc(n)}</li>`).join('')}</ul>
-    <form id="slipForm" class="slipbet"><label>Bet ($)<input name="stake" inputmode="decimal" value="${stake}"></label><div class="pays">Pays <b>${usd(stake * pg.dec)}</b>${unit ? `<small>${(stake / unit).toFixed(2).replace(/\.?0+$/, '')} units</small>` : ''}</div><button class="pri" type="submit">Save to My bets</button></form>
+    <form id="slipForm" class="slipbet"><label class="appsel">App<select name="app">${['DraftKings', 'FanDuel', 'PrizePicks', 'Other'].map((a) => `<option ${store.get('lastApp', 'DraftKings') === a ? 'selected' : ''}>${a}</option>`).join('')}</select></label><label>Bet ($)<input name="stake" inputmode="decimal" value="${stake}"></label><div class="pays">Pays <b>${usd(stake * pg.dec)}</b>${unit ? `<small>${(stake / unit).toFixed(2).replace(/\.?0+$/, '')} units</small>` : ''}</div><button class="pri" type="submit">Save to My bets</button></form>
     <div class="ckbtns"><button data-autobuild>⚡ Rebuild for me</button><button data-clearslip>Clear</button></div>
     <p class="est">Grades and chances are estimates from ESPN numbers, not sure things.</p></div>`;
 }
@@ -1443,6 +1443,67 @@ function drawGuide() {
     <p class="est">Need help? Call or text 1-800-GAMBLER, any time, free.</p>`;
 }
 
+// ---------- open one bet ----------
+const SPORT_KEY_UI = { NFL: 'nfl', NBA: 'nba', 'College FB': 'cfb', NHL: 'nhl' };
+function betLegs(b) {
+  if (Array.isArray(b.legs) && b.legs.length) return b.legs;
+  // older bets: split the description
+  const body = String(b.desc).includes(':') && /parlay|pick'em/i.test(b.desc) ? String(b.desc).split(':').slice(1).join(':') : String(b.desc);
+  return body.split(';').map((t) => ({ pick: t.trim() })).filter((x) => x.pick);
+}
+function findLegGame(leg) {
+  if (leg.gameId) { const g = S.games.find((x) => x.id === leg.gameId); if (g) return g; }
+  const t = String(leg.pick).toLowerCase();
+  return S.games.find((g) => [g.home, g.away].some((tm) => [tm.abbr, tm.name].some((n) => n && new RegExp(`\\b${n.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`).test(t)))) || null;
+}
+// Is this leg winning, losing or done? Works for sides and totals from the live score.
+function legStatus(leg, g) {
+  if (!g || g.state === 'pre') return g ? { cls: 'wait', text: `Starts ${fmtDay(g.date)} ${fmtTime(g.date)}` } : null;
+  const a = Number(g.away.score) || 0; const h = Number(g.home.score) || 0;
+  const done = g.state === 'post';
+  const word = (ok, push) => (push ? { cls: 'push', text: done ? 'Push' : 'Tied with the line' } : ok ? { cls: 'win', text: done ? 'Won ✓' : 'Winning right now' } : { cls: 'lose', text: done ? 'Lost ✕' : 'Losing right now' });
+  const tot = /^(over|under)\s+(\d+(\.\d+)?)/i.exec(leg.pick);
+  if (tot) { const line = parseFloat(tot[2]); const sum = a + h; return { ...word(/over/i.test(tot[1]) ? sum > line : sum < line, sum === line), score: `${sum} points so far` }; }
+  const sp = /^(.+?)\s+([+-]\d+(\.\d+)?|ML|moneyline)$/i.exec(String(leg.pick).trim());
+  if (sp) {
+    const nm = sp[1].toLowerCase();
+    const isHome = [g.home.abbr, g.home.name, g.home.full].some((x) => x && x.toLowerCase() === nm);
+    const isAway = [g.away.abbr, g.away.name, g.away.full].some((x) => x && x.toLowerCase() === nm);
+    if (isHome || isAway) {
+      const line = /^[+-]/.test(sp[2]) ? parseFloat(sp[2]) : 0;
+      const m = (isHome ? h - a : a - h) + line;
+      return word(m > 0, m === 0);
+    }
+  }
+  return { cls: 'wait', text: g.state === 'in' ? 'Game is live' : 'Game over' };
+}
+function openBet(id) {
+  const b = S.bets.find((x) => x.id === id);
+  if (!b) return;
+  const legs = betLegs(b);
+  const dlg = $('#sheet');
+  const rows = legs.map((l) => {
+    const g = findLegGame(l);
+    const st = legStatus(l, g);
+    const gr = l.grade || (l.est ? gradeOf(l.est, l.odds) : '');
+    const score = g && g.state !== 'pre' ? `${g.away.abbr} ${g.away.score ?? 0} - ${g.home.score ?? 0} ${g.home.abbr}${g.state === 'in' ? ` · ${periodName(g)} ${g.clock}` : ' · Final'}` : '';
+    return `<div class="obleg ${st?.cls || ''}">
+      ${gr ? `<span class="grade g${esc(gr)}">${esc(gr)}</span>` : l.call ? `<span class="call ${esc(l.call)}">${esc(l.call.toUpperCase())}</span>` : '<span class="grade" style="background:var(--s3);color:var(--mute)">?</span>'}
+      <div><b>${esc(l.pick)}</b><small>${esc([l.game || (g ? `${g.away.abbr} @ ${g.home.abbr}` : ''), l.est ? `${l.est}% estimated` : '', l.odds ? ml(Number(l.odds)) : ''].filter(Boolean).join(' · '))}</small>
+      ${score ? `<small class="sc">${esc(score)}</small>` : ''}${l.why ? `<small>${esc(l.why)}</small>` : ''}</div>
+      ${st ? `<span class="lst ${st.cls}">${esc(st.text)}</span>` : ''}
+      ${g ? `<button class="ghost golink" data-go="${esc(g.league)}/${esc(g.id)}">Game ›</button>` : ''}
+    </div>`;
+  }).join('');
+  const pay = b.payout || (b.odds ? Math.round(b.stake * decOdds(b.odds) * 100) / 100 : null);
+  dlg.innerHTML = `<div class="sheet"><div class="grab"><button data-close>Close</button></div>
+    <div class="obhead">${b.grade ? `<span class="grade big g${esc(b.grade)}">${esc(b.grade)}</span>` : ''}<div><h3>${legs.length > 1 ? `${legs.length}-leg parlay` : 'Straight bet'}</h3><div class="est">${esc(b.date)} · ${esc(b.app)} · ${b.odds ? esc(ml(Number(b.odds))) + ' · ' : ''}$${esc(b.stake)} to pay ${pay ? usd(pay) : '?'}</div></div><span class="tag ${b.status === 'won' ? 't-ok' : b.status === 'lost' ? 't-out' : ''}">${esc(b.status === 'cashout' ? 'Cashed out' : b.status[0].toUpperCase() + b.status.slice(1))}</span></div>
+    <h2 style="margin-top:14px">Your picks <span class="count">${legs.length}</span></h2>
+    <div class="oblegs">${rows}</div>
+    <p class="est" style="margin-top:12px">Winning or losing is worked out from the live score for sides and totals. Player props: check the player's card.</p></div>`;
+  if (!dlg.open) dlg.showModal();
+}
+
 // ---------- NEWS ----------
 async function renderNews() {
   const v = $('#view');
@@ -1471,7 +1532,7 @@ document.addEventListener('click', async (e) => {
   }
   const t = e.target.closest('button, a');
   if (!t) return;
-  if (t.dataset.go) { location.hash = `#/game/${t.dataset.go}`; return; }
+  if (t.dataset.go) { if ($('#sheet').open) $('#sheet').close(); location.hash = `#/game/${t.dataset.go}`; return; }
   if (t.hasAttribute('data-back')) { if (history.length > 1) history.back(); else location.hash = '#/'; return; }
   if (t.dataset.filter) { S.filter = t.dataset.filter; store.set('filter', S.filter); $$('#chips button').forEach((b) => b.setAttribute('aria-pressed', b.dataset.filter === S.filter)); renderGamesBody(); return; }
   if (t.dataset.gtab) { S.gameTab = t.dataset.gtab; $$('#gtabs button').forEach((b) => b.setAttribute('aria-pressed', b.dataset.gtab === S.gameTab)); renderGameBody(route()); return; }
@@ -1486,6 +1547,7 @@ document.addEventListener('click', async (e) => {
   if (t.dataset.pseason) { $('#sheet')._season(t.dataset.pseason); return; }
   if (t.dataset.stat) { $('#sheet')._redraw((s) => { s.stat = t.dataset.stat; s.line = null; }); return; }
   if (t.dataset.line) { $('#sheet')._redraw((s) => { s.line = Math.max(0.5, s.line + Number(t.dataset.line)); }); return; }
+  if (t.dataset.openbet) { openBet(t.dataset.openbet); return; }
   if (t.dataset.addleg) {
     if (!S.slip.length) S.slip = store.get('slip', []);
     toggleLeg(t.dataset.addleg);
@@ -1531,7 +1593,9 @@ document.addEventListener('submit', async (e) => {
     const pg = parlayGrade(S.slip);
     if (!stake || !pg) return;
     const sports = [...new Set(S.slip.map((x) => LG[x.league].label))];
-    const bet = { id: `b${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`, date: today(), app: 'Other', sport: sports.length === 1 ? sports[0] : 'Other', desc: S.slip.length === 1 ? S.slip[0].pick : `${S.slip.length}-leg parlay (grade ${pg.grade}): ${S.slip.map((x) => x.pick).join('; ')}`, odds: pg.am, stake, status: 'pending', payout: Math.round(stake * pg.dec * 100) / 100 };
+    const app = String(new FormData(e.target).get('app') || 'Other'); store.set('lastApp', app);
+    const legs = S.slip.map((x) => ({ pick: x.pick, game: x.game, gameId: x.gameId, league: x.league, kind: x.kind, est: x.est, odds: x.odds, grade: gradeOf(x.est, x.odds) }));
+    const bet = { id: `b${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`, date: today(), app, sport: sports.length === 1 ? sports[0] : 'Other', desc: S.slip.length === 1 ? S.slip[0].pick : `${S.slip.length}-leg parlay (grade ${pg.grade}): ${S.slip.map((x) => x.pick).join('; ')}`, odds: pg.am, stake, status: 'pending', payout: Math.round(stake * pg.dec * 100) / 100, grade: pg.grade, legs };
     await Bets.load();
     try { await Bets.put([bet]); } catch (err) { alert(err.message); return; }
     S.slip = []; slipSave();
@@ -1550,7 +1614,7 @@ document.addEventListener('submit', async (e) => {
   const f = Object.fromEntries(new FormData(e.target));
   const bet = { id: `b${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`, date: f.date, app: f.app, sport: f.sport, desc: f.desc.trim(), odds: Number(String(f.odds).replace('+', '')) || 0, stake: Number(f.stake) || 0, status: f.status, payout: f.payout ? Number(f.payout) : null };
   if (!bet.desc || !bet.stake) return;
-  if (e.target.id === 'ckForm') { await Bets.load(); }
+  if (e.target.id === 'ckForm') { await Bets.load(); if (CK.res?.slip?.legs) bet.legs = CK.res.slip.legs.map((l, i) => { const gl = CK.res.grade?.legs?.find((x) => x.index === i); return { pick: l.text, game: CK.res.facts?.[i]?.game?.matchup || '', gameId: CK.res.facts?.[i]?.game?.gameId || '', league: SPORT_KEY_UI[l.sport] || '', kind: l.market === 'spread' ? 'spread' : l.market === 'game_total' ? 'total' : 'prop', odds: l.odds, call: gl?.call, why: gl?.why }; }); if (CK.res?.grade?.grade) bet.grade = CK.res.grade.grade; }
   try { await Bets.put([bet]); } catch (err) { alert(err.message); return; }
   if (e.target.id === 'ckForm') { location.hash = '#/bets'; return; }
   drawBets();
