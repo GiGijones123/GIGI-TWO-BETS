@@ -1090,6 +1090,7 @@ async function renderBets() {
   await Bets.load();
   if (route().name !== 'bets') return;
   drawBets();
+  fillAllOpen();
 }
 
 function periodRange(p) {
@@ -1506,7 +1507,7 @@ function timeLeft(g) {
 function legChance(leg, g) {
   const pre = leg.est ? leg.est / 100 : null;
   if (!g) return pre;
-  if (g.state === 'pre') return pre;
+  if (g.state === 'pre') return pre ?? (/^(over|under)\s|[+-]\d/i.test(leg.pick) ? 0.5 : null);
   const a = Number(g.away.score) || 0; const h = Number(g.home.score) || 0;
   const f = timeLeft(g);
   const [sdM, sdT] = SD[g.league] || SD.nfl;
@@ -1571,6 +1572,18 @@ function legStatus(leg, g) {
     }
   }
   return { cls: 'wait', text: g.state === 'in' ? 'Game is live' : 'Game over' };
+}
+// Fill in game, grade and chance for every open bet, so the % shows without opening it.
+let fillingAll = false;
+async function fillAllOpen() {
+  if (fillingAll) return;
+  fillingAll = true;
+  try {
+    for (const b of (S.bets || []).filter((x) => x.status === 'pending')) await fillLegs(b).catch(() => false);
+    const r = route().name;
+    if (r === 'games') renderGamesBody();
+    else if (r === 'bets') for (const el of $$('[data-lc]')) { const b = S.bets.find((x) => x.id === el.dataset.lc); if (b) el.innerHTML = liveChanceText(b); }
+  } finally { fillingAll = false; }
 }
 async function fillLegs(b) {
   const legs = betLegs(b);
@@ -1759,7 +1772,7 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 window.addEventListener('hashchange', render);
 (async () => {
   render();
-  Bets.load().then(() => { if (route().name === 'games') renderGamesBody(); }).catch((e) => console.warn('open bets strip', e));
+  Bets.load().then(() => { if (route().name === 'games') renderGamesBody(); fillAllOpen(); }).catch((e) => console.warn('open bets strip', e));
   await loadDaily();
   loadScoreboard();
 })();
