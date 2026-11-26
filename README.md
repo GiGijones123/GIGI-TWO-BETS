@@ -28,3 +28,11 @@ Picks and percentages are estimates, not sure things.
 npm run mock   # made-up data, works offline, http://localhost:3000
 npm run dev    # real ESPN data
 ```
+
+## AI Check
+
+The AI Check tab reads a photo of a bet slip, looks up ESPN numbers for each pick and grades it
+(keep, change or drop). It needs `ANTHROPIC_API_KEY` in Vercel. It uses `claude-haiku-5-5` (well under
+1 cent a check); set `CHECK_MODEL=claude-opus-5-5` for the top model. If `BETS_PASSCODE` is set, the
+same passcode protects AI Check so strangers can't spend your credit. `npm run mock` fakes the AI so it
+can be tried for free.

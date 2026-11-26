@@ -141,6 +141,7 @@ export function mockFetch(url) {
   else if (/teams\/\d+\/statistics$/.test(p)) body = teamStats(p.match(/teams\/(\d+)/)[1]);
   else if (p.endsWith('/standings')) body = standings();
   else if (p.endsWith('/news')) body = news();
+  else if (p.endsWith('/common/v3/search')) body = { items: [{ id: '4374302', uid: 's:20~l:28~a:4374302', displayName: 'Amon-Ra St. Brown', type: 'player', league: 'nfl' }] };
   else if (/athletes\/\d+\/overview$/.test(p)) body = overview();
   else if (/athletes\/\d+\/gamelog$/.test(p)) body = gamelog(p.match(/athletes\/(\d+)/)[1]);
   else if (/athletes\/\d+$/.test(p)) body = athlete(p.match(/athletes\/(\d+)/)[1]);

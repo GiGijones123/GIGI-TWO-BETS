@@ -8,5 +8,10 @@
     "dev": "node dev/server.js",
     "mock": "ESPN_MOCK=1 node dev/server.js"
   },
-  "engines": { "node": ">=18" }
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^1.14.0"
+  }
 }

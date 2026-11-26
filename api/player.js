@@ -1,7 +1,7 @@
 // One player: bio, photo, season numbers and a game-by-game log.
 import { league, urls, tryJSON, handler, headshot, num } from '../lib/espn.js';
 
-function bio(j, L, id) {
+export function bio(j, L, id) {
   const a = j?.athlete || j || {};
   return {
     id,
@@ -26,7 +26,7 @@ function bio(j, L, id) {
   };
 }
 
-function gamelog(j) {
+export function gamelog(j) {
   if (!j) return { names: [], labels: [], games: [] };
   const names = j.names || [];
   const labels = j.labels || [];

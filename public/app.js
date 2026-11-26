@@ -244,6 +244,7 @@ function route() {
   if (a === 'game' && b && c) return { name: 'game', league: b, id: c };
   if (a === 'bets') return { name: 'bets' };
   if (a === 'news') return { name: 'news' };
+  if (a === 'check') return { name: 'check' };
   if (a === 'season') return { name: 'season' };
   return { name: 'games' };
 }
@@ -259,6 +260,7 @@ function render() {
   else if (r.name === 'game') renderGame(r);
   else if (r.name === 'season') renderSeason();
   else if (r.name === 'bets') renderBets();
+  else if (r.name === 'check') renderCheck();
   else renderNews();
 }
 function onData() {
@@ -984,6 +986,130 @@ function drawBets() {
         <div class="pl ${profit(b) > 0 ? 'pos' : profit(b) < 0 ? 'neg' : ''}">${b.status === 'pending' ? '<span class="tag">Pending</span>' : money(profit(b))}</div></div>`).join('') : '<div class="empty">No bets yet. Add your first one above.</div>'}</div>`;
 }
 
+// ---------- AI CHECK ----------
+// Snap a bet slip: the server reads it with AI, pulls ESPN numbers and grades each pick.
+const CK = { img: null, type: 'image/jpeg', res: null, busy: false, err: '' };
+
+function shrinkImage(file) {
+  return new Promise((ok, bad) => {
+    const url = URL.createObjectURL(file);
+    const im = new Image();
+    im.onload = () => {
+      const max = 1600;
+      const k = Math.min(1, max / Math.max(im.width, im.height));
+      const c = document.createElement('canvas');
+      c.width = Math.round(im.width * k); c.height = Math.round(im.height * k);
+      c.getContext('2d').drawImage(im, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(url);
+      ok(c.toDataURL('image/jpeg', 0.85));
+    };
+    im.onerror = () => { URL.revokeObjectURL(url); bad(new Error('Could not open that picture')); };
+    im.src = url;
+  });
+}
+
+function renderCheck() {
+  const v = $('#view');
+  v.innerHTML = `<h1>AI Check</h1><p class="sub">Add a screenshot of your bet. AI reads it, checks the real numbers on ESPN and tells you what to keep or change.</p><div id="ckBody"></div>`;
+  drawCheck();
+}
+
+function drawCheck(step = -1) {
+  const el = $('#ckBody');
+  if (!el) return;
+  const steps = ['Reading your slip', 'Pulling player and game numbers', 'Grading each pick'];
+  const pick = `<label class="drop"><span class="big">📸</span><b>${CK.img ? 'Use a different picture' : 'Add your bet slip'}</b><span>Screenshot from DraftKings, PrizePicks, FanDuel or a photo</span><input type="file" accept="image/*" id="ckFile"></label>`;
+  let html = CK.img ? `<img class="slipimg${CK.res ? ' small' : ''}" src="${CK.img}" alt="Your bet slip">` : '';
+  if (CK.busy) {
+    html += `<div class="thinking">${steps.map((s, i) => `<div class="st ${i < step ? 'done' : i === step ? 'on' : ''}">${i < step ? '✓' : i === step ? '⏳' : '○'} ${s}</div>`).join('')}<div class="est">Usually takes 10 to 30 seconds.</div></div>`;
+  } else {
+    html = pick + html;
+    if (CK.img && !CK.res) html += `<div class="ckbtns"><button class="pri" data-ckgo>Check my bet</button></div>`;
+  }
+  if (CK.err) html += `<div class="note" style="margin-top:12px">⚠️ ${esc(CK.err)}</div>`;
+  if (CK.res && !CK.busy) html += checkResult(CK.res);
+  el.innerHTML = html;
+}
+
+function factChips(f) {
+  const p = f?.player;
+  const out = [];
+  const rate = (lbl, r) => r && r.games ? `<span>${lbl} <b>${r.hits}/${r.games}</b> · avg <b>${r.avg}</b></span>` : '';
+  if (p) {
+    if (p.stat === 'anytime_td' && p.last10) out.push(`<span>TD in <b>${p.last10.hits} of ${p.last10.games}</b> recent games</span>`);
+    else out.push(rate('Last 5', p.last5), rate('Last 10', p.last10), rate('Season', p.season));
+    if (p.injury && p.injury !== 'none listed') out.push(`<span>🚑 <b>${esc(p.injury)}</b></span>`);
+  }
+  const g = f?.game;
+  if (g) {
+    if (g.odds?.line) out.push(`<span>Line <b>${esc(g.odds.line)}</b>${g.odds.total ? ` · O/U <b>${esc(g.odds.total)}</b>` : ''}</span>`);
+    if (g.espnWinChance) out.push(`<span>ESPN win chance ${Object.entries(g.espnWinChance).filter(([, x]) => x !== null).map(([k, x]) => `${esc(k)} <b>${Math.round(x)}%</b>`).join(' · ')}</span>`);
+  }
+  return out.filter(Boolean).join('');
+}
+
+function checkResult(r) {
+  const { slip, grade, facts = [] } = r;
+  if (!grade) return '';
+  const legs = slip.legs || [];
+  const legCards = legs.map((l, i) => {
+    const gl = grade.legs.find((x) => x.index === i) || grade.legs[i] || { call: 'keep', why: '', change: '' };
+    const p = facts[i]?.player;
+    const faceHTML = p?.headshot ? `<span class="ph"><img src="${esc(p.headshot)}" alt="" onerror="this.remove()"><i>${esc(initials(p.name))}</i></span>` : `<span class="ph"><i>${esc(initials(l.player || l.team))}</i></span>`;
+    const tap = p?.id ? ` data-player="${esc(p.league)}:${esc(p.id)}"` : '';
+    return `<div class="legcard"><div class="top">${tap ? `<button class="ghost" style="padding:0;min-height:0;background:none"${tap} aria-label="Open player card">${faceHTML}</button>` : faceHTML}<div class="lt">${esc(l.text)}${l.odds ? ` <span class="est">${esc(ml(l.odds))}</span>` : ''}</div><span class="call ${esc(gl.call)}">${esc(gl.call.toUpperCase())}</span></div>
+      <div class="facts">${factChips(facts[i])}</div>
+      <p class="why">${esc(gl.why)}</p>${gl.change ? `<p class="swap">➜ ${esc(gl.change)}</p>` : ''}</div>`;
+  }).join('');
+  const sports = [...new Set(legs.map((l) => l.sport))];
+  const desc = legs.length === 1 ? legs[0].text : `${legs.length}-leg ${slip.betType === 'pickem' ? 'pick\'em' : 'parlay'}: ${legs.map((l) => l.text).join('; ')}`;
+  const status = legs.length && legs.every((l) => l.status === 'won') ? 'won' : legs.some((l) => l.status === 'lost') ? 'lost' : 'pending';
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(slip.placed) ? slip.placed : today();
+  const sel = (name, opts, cur) => `<select name="${name}">${opts.map((o) => `<option ${o === cur ? 'selected' : ''}>${o}</option>`).join('')}</select>`;
+  return `
+    <div class="gradecard g-${esc(grade.verdict)}"><div class="gl">${esc(grade.grade)}</div><div><h3>${esc(grade.headline)}</h3><p>${esc(grade.summary)}</p></div></div>
+    <h2>Pick by pick <span class="count">${legs.length}</span></h2>
+    <div style="display:grid;gap:10px">${legCards}</div>
+    ${grade.tips?.length ? `<h2>Tips</h2><ul class="tips">${grade.tips.map((t) => `<li>${esc(t)}</li>`).join('')}</ul>` : ''}
+    <p class="est" style="margin-top:12px">AI estimates from ESPN numbers. Not a sure thing, bet what you can afford.</p>
+    <h2>Save to My bets</h2>
+    <p class="sub">Filled in from your slip. Fix anything that looks off.</p>
+    <form class="bet sec" id="ckForm">
+      <label class="wide">What did you bet?<input name="desc" required maxlength="300" value="${esc(desc)}"></label>
+      <label>App${sel('app', ['DraftKings', 'PrizePicks', 'FanDuel', 'Other'], slip.app)}</label>
+      <label>Sport${sel('sport', ['NFL', 'NBA', 'College FB', 'NHL', 'Other'], sports.length === 1 ? sports[0] : 'Other')}</label>
+      <label>Date<input name="date" type="date" value="${esc(date)}" required></label>
+      <label>Odds<input name="odds" inputmode="numeric" value="${slip.odds ? esc(ml(slip.odds)) : ''}" placeholder="-110 or +150"></label>
+      <label>Stake ($)<input name="stake" inputmode="decimal" required value="${slip.stake ?? ''}" placeholder="10"></label>
+      <label>Payout if won ($)<input name="payout" inputmode="decimal" value="${slip.payout ?? ''}" placeholder="optional"></label>
+      <label>Result<select name="status">${['pending', 'won', 'lost', 'push'].map((s) => `<option value="${s}" ${s === status ? 'selected' : ''}>${s[0].toUpperCase() + s.slice(1)}</option>`).join('')}</select></label>
+      <button class="pri wide" type="submit">Save bet</button>
+    </form>
+    <div class="ckbtns" style="margin-top:10px"><button data-ckreset>Check another bet</button></div>`;
+}
+
+async function runCheck() {
+  if (!CK.img || CK.busy) return;
+  CK.busy = true; CK.err = ''; CK.res = null;
+  let step = 0; drawCheck(step);
+  const tick = setInterval(() => { if (step < 2) drawCheck(++step); }, 6000);
+  try {
+    const r = await fetch('/api/check', { method: 'POST', headers: { 'content-type': 'application/json', 'x-bets-pass': store.get('pass', '') }, body: JSON.stringify({ image: CK.img.split(',')[1], mediaType: CK.type }) });
+    const j = await r.json().catch(() => ({ error: 'The check timed out. Try again.' }));
+    if (r.status === 401) {
+      const pass = prompt('Enter your GIGI Picks passcode');
+      clearInterval(tick); CK.busy = false;
+      if (pass !== null) { store.set('pass', pass); return runCheck(); }
+      CK.err = 'Passcode needed'; return drawCheck();
+    }
+    if (r.status === 501) CK.err = 'AI Check is built but not switched on yet. It needs an AI key added in Vercel (see the setup steps).';
+    else if (!r.ok || !j.grade) CK.err = j.error || 'Something went wrong. Try again.';
+    else CK.res = j;
+  } catch { CK.err = 'No connection. Try again.'; }
+  clearInterval(tick); CK.busy = false;
+  if (route().name === 'check') drawCheck();
+}
+
 // ---------- NEWS ----------
 async function renderNews() {
   const v = $('#view');
@@ -1021,10 +1147,20 @@ document.addEventListener('click', async (e) => {
   if (t.dataset.stat) { $('#sheet')._redraw((s) => { s.stat = t.dataset.stat; s.line = null; }); return; }
   if (t.dataset.line) { $('#sheet')._redraw((s) => { s.line = Math.max(0.5, s.line + Number(t.dataset.line)); }); return; }
   if (t.dataset.period) { S.period = t.dataset.period; drawBets(); return; }
+  if (t.hasAttribute('data-ckgo')) { runCheck(); return; }
+  if (t.hasAttribute('data-ckreset')) { CK.img = null; CK.res = null; CK.err = ''; drawCheck(); return; }
   if (t.dataset.del) { if (confirm('Delete this bet?')) { try { await Bets.del(t.dataset.del); } catch (err) { alert(err.message); } drawBets(); } return; }
   if (t.hasAttribute('data-migrate')) { try { await Bets.put(Bets.local()); store.set('bets', []); } catch (err) { alert(err.message); } drawBets(); }
 });
 document.addEventListener('change', async (e) => {
+  if (e.target.id === 'ckFile') {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    try { CK.img = await shrinkImage(f); CK.type = 'image/jpeg'; CK.res = null; CK.err = ''; } catch (err) { CK.err = err.message; }
+    drawCheck();
+    if (CK.img) runCheck();
+    return;
+  }
   if (e.target.id === 'seasonPick') { S.sSeason = Number(e.target.value); S.sSel = null; renderSeason(); return; }
   const s = e.target.closest('[data-status]');
   if (!s) return;
@@ -1036,12 +1172,14 @@ document.addEventListener('change', async (e) => {
   drawBets();
 });
 document.addEventListener('submit', async (e) => {
-  if (e.target.id !== 'betForm') return;
+  if (e.target.id !== 'betForm' && e.target.id !== 'ckForm') return;
   e.preventDefault();
   const f = Object.fromEntries(new FormData(e.target));
   const bet = { id: `b${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`, date: f.date, app: f.app, sport: f.sport, desc: f.desc.trim(), odds: Number(String(f.odds).replace('+', '')) || 0, stake: Number(f.stake) || 0, status: f.status, payout: f.payout ? Number(f.payout) : null };
   if (!bet.desc || !bet.stake) return;
+  if (e.target.id === 'ckForm') { await Bets.load(); }
   try { await Bets.put([bet]); } catch (err) { alert(err.message); return; }
+  if (e.target.id === 'ckForm') { location.hash = '#/bets'; return; }
   drawBets();
 });
 $('#sheet').addEventListener('click', (e) => { if (e.target.id === 'sheet') $('#sheet').close(); });

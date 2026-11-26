@@ -8,7 +8,7 @@ function etDate(offsetDays = 0) {
   return p.replace(/-/g, '');
 }
 
-async function one(key) {
+export async function one(key) {
   const L = LEAGUES[key];
   const base = `${urls.SITE}/${L.path}/scoreboard`;
   let lists;
