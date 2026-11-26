@@ -78,7 +78,7 @@ function summary(id) {
   const ev = isLive ? liveEvent() : id === '401810001' ? sbNBA().events[0] : sbNFL().events.find((e) => e.id === id) || sbNFL().events[1];
   const c = ev.competitions[0];
   const [home, away] = c.competitors;
-  const play = (i, text, extra = {}) => ({ id: String(1000 + i), text, period: { number: 3 }, clock: { displayValue: `${10 - (i % 10)}:${String(i * 7 % 60).padStart(2, '0')}` }, type: { text: extra.type || 'Rush' }, scoringPlay: !!extra.score, awayScore: 17, homeScore: 20, ...extra });
+  const play = (i, text, extra = {}) => ({ id: String(1000 + i), text, period: { number: 3 }, clock: { displayValue: `${10 - (i % 10)}:${String(i * 7 % 60).padStart(2, '0')}` }, type: { text: extra.type || 'Rush' }, scoringPlay: !!extra.score, start: { shortDownDistanceText: ['1st & 10', '2nd & 6', '3rd & 2'][i % 3] }, wallclock: iso(Date.now() - Math.max(0, 8 - i) * 120000), awayScore: 17, homeScore: 20, ...extra });
   return {
     header: { id: ev.id, competitions: [{ date: ev.date, competitors: c.competitors, status: c.status }] },
     pickcenter: [...c.odds, { provider: { name: 'DraftKings' }, details: c.odds[0].details, overUnder: c.odds[0].overUnder + 1, homeTeamOdds: { moneyLine: -130 }, awayTeamOdds: { moneyLine: 110 } }],
@@ -97,7 +97,7 @@ function summary(id) {
         { name: 'receiving', keys: ['receptions', 'receivingYards'], athletes: [{ athlete: { id: '4374302', displayName: 'Amon-Ra St. Brown' }, stats: ['7', '88'] }] },
       ] }],
     } : { teams: [], players: [] },
-    winprobability: isLive ? [{ homeWinPercentage: 0.61 }, { homeWinPercentage: 0.64 }] : undefined,
+    winprobability: isLive ? [1000, 1001, 1002, 1006, 1003, 1004, 1005].map((id, k) => ({ playId: String(id + 1), homeWinPercentage: [0.55, 0.52, 0.5, 0.47, 0.58, 0.66, 0.63][k] })) : undefined,
   };
 }
 

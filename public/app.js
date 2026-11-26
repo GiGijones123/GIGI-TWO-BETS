@@ -336,12 +336,12 @@ function swapIn(box, html, id) {
 
 // Keep a list of plays in sync without redrawing it: old rows stay put (photos stay loaded),
 // new plays slide in at the top.
-function syncFeed(feed, plays) {
+function syncFeed(feed, plays, g) {
   if (!feed) return;
   const first = !feed._ready;
   const have = new Map([...feed.children].map((n) => [n.dataset.pid, n]));
   const nodes = plays.map((p) => {
-    const html = playRow(p);
+    const html = playRow(p, g);
     const pid = String(p.id);
     let n = have.get(pid);
     if (n && n._h === html) return n;
@@ -521,7 +521,7 @@ function renderGameLive(r) {
   // Build the frame once per game, then only swap the parts that changed so nothing flickers.
   const key = `${g.id}:${live || post ? 1 : 0}`;
   if (el._key !== key) {
-    el.innerHTML = `<div class="hero" style="--ca:${esc(g.away.color)};--ch:${esc(g.home.color)}"><div id="hTop"></div>${live || post ? '<div class="livebox"><div class="lb" id="hPlay"></div><div class="lb inj" id="hInj"></div></div>' : ''}</div>`;
+    el.innerHTML = `<div class="hero" style="--ca:${esc(g.away.color)};--ch:${esc(g.home.color)}"><div id="hTop"></div>${live || post ? '<div class="livebox" role="button" tabindex="0" aria-label="See every play"><div class="lb" id="hPlay"></div><div class="lb inj" id="hInj"></div><div class="seeall">See every play ›</div></div>' : ''}</div>`;
     el._key = key;
   }
   setHTML($('#hTop', el), top);
@@ -715,9 +715,9 @@ function renderPlays(body, g, sum) {
   const scoring = plays.filter((p) => p.scoring).slice(0, 12);
   $('#sInj', body).hidden = !inj.length;
   $('#sScore', body).hidden = !scoring.length;
-  syncFeed($('#fInj', body), inj);
-  syncFeed($('#fScore', body), scoring);
-  syncFeed($('#fAll', body), plays);
+  syncFeed($('#fInj', body), inj, g);
+  syncFeed($('#fScore', body), scoring, g);
+  syncFeed($('#fAll', body), plays, g);
 }
 // Short play cards: photo of who made the play, what they did, who stopped them, totals after the play.
 const pface = (x, cls) => `<span class="${cls}">${x.headshot ? `<img src="${esc(x.headshot)}" alt="" loading="lazy" onerror="this.remove()">` : ''}<i>${esc(initials(x.name))}</i></span>`;
@@ -735,7 +735,32 @@ function actorsHTML(p, { compact = false } = {}) {
 const injuredHTML = (p) => (p.injured || []).map((x) => `<div class="actor sm injr ${x.returned ? 'back' : ''}">${pface(x, 'ph')}<div><span class="an">${esc(x.name)}</span> <span class="al">${x.returned ? '✅ back in the game' : '🚑 hurt on the play'}</span></div></div>`).join('');
 const playShort = (p) => (p?.who?.[0] ? `${p.who[0].name}: ${p.who[0].line}${p.defense?.[0] ? ` (${p.defense[0].line.toLowerCase()} by ${p.defense[0].name})` : ''}` : p?.text || '');
 const injShort = (p) => (p?.injured?.length ? p.injured.map((x) => `${x.name} (${x.team}) ${x.returned ? 'is back in the game' : 'got hurt'}`).join(' · ') : p?.text || '');
-const playRow = (p) => `<div class="play ${p.injured?.some((x) => !x.returned) ? 'inj' : p.scoring ? 'score' : ''} ${p.voided ? 'void' : ''}"><div class="t"><b>${esc(p.clock)}</b>${esc(p.periodLabel || (p.period ? 'Q' + p.period : ''))}</div><div class="pbody"><div class="ty">${esc(p.team)}${p.team && p.type ? ' · ' : ''}${esc(p.type)}${p.scoring && p.away !== null ? ` · ${p.away}-${p.home}` : ''}${p.voided ? ' · no play' : ''}</div>${actorsHTML(p)}${injuredHTML(p)}</div></div>`;
+function agoText(iso) {
+  const ms = Date.now() - new Date(iso);
+  if (!iso || !(ms >= 0)) return '';
+  const m = Math.floor(ms / 60e3);
+  return m < 1 ? 'now' : m < 60 ? `${m}m ago` : `${Math.floor(m / 60)}h ago`;
+}
+// One play as a feed card: who made it (big photo), what happened, their totals, who else was in on it.
+function playRow(p, g) {
+  const who = p.who || []; const def = p.defense || [];
+  const [m, ...rest] = who;
+  const cls = `${p.injured?.some((x) => !x.returned) ? 'inj' : p.scoring ? 'score' : ''} ${p.voided ? 'void' : ''}`;
+  const tm = g && p.teamId ? (String(g.home.id) === p.teamId ? g.home : String(g.away.id) === p.teamId ? g.away : null) : null;
+  const score = g && p.away !== null && p.away !== undefined ? `${esc(g.away.abbr)} ${p.away}-${p.home} ${esc(g.home.abbr)}` : '';
+  const meta = [score, `${esc(p.periodLabel || (p.period ? 'Q' + p.period : ''))} ${esc(p.clock)}`.trim(), esc(p.down || '')].filter(Boolean).join(' · ');
+  const swing = p.swing ? `<span class="swing ${p.swing > 0 ? 'up' : 'dn'}" title="Win chance change">${p.swing > 0 ? '▲' : '▼'}${Math.abs(p.swing)}%</span>` : '';
+  const photo = m || p.injured?.[0] || null;
+  const av = `<div class="fav">${photo ? pface(photo, 'ph') : `<span class="ph">${tm?.logo ? `<img src="${esc(tm.logo)}" alt="" style="object-fit:contain;padding:8px">` : ''}<i>${esc(p.team || '')}</i></span>`}${tm ? `<span class="tb" style="background:${esc(tm.color)}">${esc(tm.abbr)}</span>` : p.team ? `<span class="tb">${esc(p.team)}</span>` : ''}</div>`;
+  const head = m ? m.line : p.type || 'Play';
+  const sub = [];
+  if (m) sub.push(`<div class="fl1"><b>${esc(m.name)}</b>${m.total ? ` · ${esc(m.total)}` : ''}</div>`);
+  for (const x of rest) sub.push(`<div class="fl2">${esc(x.name)}${x.total ? ` · ${esc(x.total)}` : ''} <span class="fr">${esc(x.line)}</span></div>`);
+  for (const x of def) sub.push(`<div class="fl2"><span class="fr">${esc(x.line)}:</span> ${esc(x.name)}${x.total ? ` · ${esc(x.total)}` : ''}</div>`);
+  if (!m && !p.injured?.length) sub.push(`<div class="fl2">${esc(p.text)}</div>`);
+  for (const x of p.injured || []) sub.push(`<div class="fl2 ${x.returned ? 'back' : 'hurt'}">${x.returned ? '✅' : '🚑'} ${esc(x.name)} ${x.returned ? 'back in the game' : 'hurt on the play'}</div>`);
+  return `<div class="play feedp ${cls}">${av}<div class="pbody"><div class="fmeta"><span>${meta}${p.wall ? ` · <span data-ago="${esc(p.wall)}">${agoText(p.wall)}</span>` : ''}</span>${swing}</div><div class="fhead">${esc(head)}${p.voided ? ' <span class="est">no play</span>' : ''}</div>${sub.join('')}</div></div>`;
+}
 
 // ---------- PAST GAMES / SEASONS ----------
 const viewSwitch = (on) => `<div class="seg" style="margin:4px 0 10px"><button data-view="today" aria-pressed="${on === 'today'}">Today &amp; upcoming</button><button data-view="season" aria-pressed="${on === 'season'}">Past games</button></div>`;
@@ -1221,6 +1246,13 @@ async function renderNews() {
 
 // ---------- events ----------
 document.addEventListener('click', async (e) => {
+  if (e.target.closest('#hero .livebox') && !e.target.closest('button, a')) {
+    S.gameTab = 'plays';
+    $$('#gtabs button').forEach((b) => b.setAttribute('aria-pressed', b.dataset.gtab === 'plays'));
+    renderGameBody(route());
+    $('#gtabs')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    return;
+  }
   const t = e.target.closest('button, a');
   if (!t) return;
   if (t.dataset.go) { location.hash = `#/game/${t.dataset.go}`; return; }
@@ -1278,6 +1310,7 @@ $('#sheet').addEventListener('click', (e) => { if (e.target.id === 'sheet') $('#
 
 // countdown ticker (every second)
 setInterval(() => { for (const el of $$('[data-cd]')) el.textContent = countdown(el.dataset.cd); }, 1000);
+setInterval(() => { for (const el of $$('[data-ago]')) el.textContent = agoText(el.dataset.ago); }, 30e3);
 // "updated Xs ago"
 setInterval(() => { if (S.updated && !S.err && !S.games.some((g) => g.state === 'in')) $('#pulseText').textContent = `Updated ${Math.max(1, Math.round((Date.now() - S.updated) / 1000))}s ago`; }, 5000);
 // refresh right away when coming back to the app

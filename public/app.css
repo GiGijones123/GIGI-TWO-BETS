@@ -383,3 +383,23 @@ input, select { font: inherit; font-size: 16px; padding: 9px 10px; border: 1px s
 .hurtnote { margin: 8px 0 0; font-size: 14px; color: #ffd6dd; background: #ff4d6a22; border-radius: 10px; padding: 7px 9px; }
 .whyd { margin-top: 8px; }
 .whyd summary { cursor: pointer; font-weight: 800; color: var(--cyan, #36e2ff); font-size: 14px; }
+
+/* play feed cards */
+.play.feedp { grid-template-columns: 58px minmax(0, 1fr); padding: 12px; gap: 12px; }
+.feed { display: grid; gap: 8px; }
+.fav { position: relative; width: 58px; height: 58px; }
+.fav .ph { position: relative; width: 58px; height: 58px; border-radius: 50%; overflow: hidden; background: linear-gradient(170deg, #2b2752, #17142f); display: grid; place-items: center; }
+.fav .ph img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: top; }
+.fav .ph i { font: 800 17px/1 var(--disp); font-style: normal; color: #fff9; }
+.fav .tb { position: absolute; right: -4px; bottom: -2px; font: 800 9px/1 Figtree, sans-serif; color: #fff; background: var(--s3); border: 2px solid var(--bg2); border-radius: 99px; padding: 3px 4px; }
+.fmeta { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; font-weight: 700; color: var(--mute); }
+.swing { font-weight: 800; white-space: nowrap; }
+.swing.up { color: var(--win); } .swing.dn { color: var(--loss); }
+.fhead { font: 800 21px/1.05 var(--disp); text-transform: uppercase; color: var(--ink); }
+.play.score .fhead { color: var(--lime); }
+.fl1 { font-size: 15px; color: var(--ink); } .fl1 b { font-weight: 800; }
+.fl2 { font-size: 13px; color: var(--mute); }
+.fl2 .fr { color: var(--cyan); font-weight: 700; }
+.fl2.hurt { color: #ff9aab; } .fl2.back { color: var(--win); }
+.livebox { cursor: pointer; }
+.seeall { text-align: right; font-size: 13px; font-weight: 800; color: var(--cyan); padding: 0 4px; }
