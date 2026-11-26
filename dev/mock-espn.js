@@ -73,6 +73,18 @@ const teamStats = (id) => ({ results: { stats: { categories: [
   { name: 'general', stats: [{ name: 'fieldGoalPct', value: 47.1 }, { name: 'threePointFieldGoalPct', value: 36.2 }, { name: 'avgThreePointFieldGoalsAttempted', value: 38 }, { name: 'avgFieldGoalsAttempted', value: 89 }, { name: 'avgRebounds', value: 44.1 }] },
 ] } } });
 
+// Early-game plays so the win chance chart has a full line to slide along.
+const FILL = (() => {
+  const out = []; let wp = 0.56; let a = 0; let h = 0;
+  for (let i = 0; i < 46; i++) {
+    const t = (i / 46) * 37; const per = Math.min(3, Math.floor(t / 15) + 1); const left = per * 15 - t;
+    const sc = [7, 15, 22, 30, 36, 41].includes(i);
+    if (sc) { if (i % 2) a += 7; else h += i === 30 ? 6 : 7; }
+    wp = Math.min(0.92, Math.max(0.12, wp + Math.sin(i * 1.7) * 0.035 + (sc ? (i % 2 ? -0.09 : 0.09) : 0)));
+    out.push({ wp: Math.round(wp * 1000) / 1000, play: { id: String(2000 + i), text: sc ? (i % 2 ? 'C.Williams pass to R.Odunze for 18 yards, TOUCHDOWN' : 'J.Gibbs run for 6 yards, TOUCHDOWN') : ['J.Goff pass short right to S.LaPorta for 9 yards', 'D.Montgomery up the middle for 4 yards', 'C.Williams pass incomplete deep left', 'D.Swift left end for 7 yards'][i % 4], period: { number: per }, clock: { displayValue: `${Math.floor(left)}:${String(Math.floor((left % 1) * 60)).padStart(2, '0')}` }, type: { text: sc ? 'Rushing Touchdown' : i % 4 === 0 || i % 4 === 2 ? 'Pass Reception' : 'Rush' }, scoringPlay: sc, start: { shortDownDistanceText: '1st & 10' }, awayScore: Math.min(a, 17), homeScore: Math.min(h, 20) } });
+  }
+  return out;
+})();
 function summary(id) {
   const isLive = id === '401772001';
   const ev = isLive ? liveEvent() : id === '401810001' ? sbNBA().events[0] : sbNFL().events.find((e) => e.id === id) || sbNFL().events[1];
@@ -89,7 +101,7 @@ function summary(id) {
     ],
     lastFiveGames: [{ team: { id: away.team.id }, events: ['W', 'W', 'W', 'L', 'W'].map((r) => ({ gameResult: r, score: '24-17', opponent: { abbreviation: 'NO' }, atVs: 'vs' })) }, { team: { id: home.team.id }, events: ['W', 'L', 'W', 'W', 'L'].map((r) => ({ gameResult: r, score: '27-20', opponent: { abbreviation: 'TB' }, atVs: '@' })) }],
     leaders: [{ team: { id: home.team.id }, leaders: [{ displayName: 'Passing', leaders: [{ athlete: { id: '3046779', displayName: 'Jared Goff' }, displayValue: '201 YDS' }] }, { displayName: 'Receiving', leaders: [{ athlete: { id: '4374302', displayName: 'Amon-Ra St. Brown' }, displayValue: '88 YDS' }] }] }],
-    drives: isLive ? { previous: [{ team: { id: '3' }, plays: [play(1, '(Shotgun) C.Williams pass deep right to L.Burden to DET 25 for 25 yards (B.Branch). DET-B.Branch was injured during the play.', { type: 'Pass Reception' }), play(2, 'D.Swift up the middle to CHI 35 for 6 yards (T.Williams; D.Barnes). ** Injury Update: DET-B.Branch has returned to the game.', { type: 'Rush' }), play(6, '(Shotgun) C.Williams sacked at CHI 30 for -7 yards (D.Wonnum).', { type: 'Sack' })] }, { team: { id: '8' }, plays: [play(3, 'J.Gibbs left tackle for 12 yards, TOUCHDOWN.', { score: true, type: 'Rushing Touchdown' }), play(4, 'J.Goff pass short middle intended for J.Williams INTERCEPTED by K.Gordon at CHI 40. K.Gordon to CHI 45 for 5 yards (A.St. Brown).', { type: 'Interception' })] }], current: { team: { id: '8' }, plays: [play(5, liveEvent().competitions[0].situation.lastPlay.text, { type: 'Pass Reception' }), ...Array.from({ length: Math.floor((Date.now() - now) / 9000) % 30 }, (_, k) => play(100 + k, `J.Gibbs up the middle to DET ${30 + k} for ${3 + (k % 5)} yards (T.Edmunds).`, { type: 'Rush' }))] } } : undefined,
+    drives: isLive ? { previous: [{ team: { id: '8' }, plays: FILL.map((f) => f.play) }, { team: { id: '3' }, plays: [play(1, '(Shotgun) C.Williams pass deep right to L.Burden to DET 25 for 25 yards (B.Branch). DET-B.Branch was injured during the play.', { type: 'Pass Reception' }), play(2, 'D.Swift up the middle to CHI 35 for 6 yards (T.Williams; D.Barnes). ** Injury Update: DET-B.Branch has returned to the game.', { type: 'Rush' }), play(6, '(Shotgun) C.Williams sacked at CHI 30 for -7 yards (D.Wonnum).', { type: 'Sack' })] }, { team: { id: '8' }, plays: [play(3, 'J.Gibbs left tackle for 12 yards, TOUCHDOWN.', { score: true, type: 'Rushing Touchdown' }), play(4, 'J.Goff pass short middle intended for J.Williams INTERCEPTED by K.Gordon at CHI 40. K.Gordon to CHI 45 for 5 yards (A.St. Brown).', { type: 'Interception' })] }], current: { team: { id: '8' }, plays: [play(5, liveEvent().competitions[0].situation.lastPlay.text, { type: 'Pass Reception' }), ...Array.from({ length: Math.floor((Date.now() - now) / 9000) % 30 }, (_, k) => play(100 + k, `J.Gibbs up the middle to DET ${30 + k} for ${3 + (k % 5)} yards (T.Edmunds).`, { type: 'Rush' }))] } } : undefined,
     boxscore: isLive ? {
       teams: [{ team: { id: '3', abbreviation: 'CHI' }, statistics: [{ name: 'totalYards', label: 'Total Yards', displayValue: '288' }, { name: 'turnovers', label: 'Turnovers', displayValue: '1' }] }, { team: { id: '8', abbreviation: 'DET' }, statistics: [{ name: 'totalYards', label: 'Total Yards', displayValue: '341' }, { name: 'turnovers', label: 'Turnovers', displayValue: '0' }] }],
       players: [{ team: { id: '3' }, statistics: [{ name: 'misc', keys: ['x'], athletes: [['4431611', 'Caleb Williams'], ['4685278', 'Luther Burden III'], ['4360438', "D'Andre Swift"], ['17', 'Kyler Gordon']].map(([id, n]) => ({ athlete: { id, displayName: n }, stats: ['1'] })) }] }, { team: { id: '8' }, statistics: [{ name: 'misc', keys: ['x'], athletes: [['49', 'Brian Branch'], ['42', 'Tyleik Williams'], ['45', 'Derrick Barnes'], ['44', 'DJ Wonnum'], ['4429795', 'Jahmyr Gibbs'], ['4426388', 'Jameson Williams']].map(([id, n]) => ({ athlete: { id, displayName: n }, stats: ['1'] })) }] }, { team: { id: '8' }, statistics: [
@@ -97,7 +109,7 @@ function summary(id) {
         { name: 'receiving', keys: ['receptions', 'receivingYards'], athletes: [{ athlete: { id: '4374302', displayName: 'Amon-Ra St. Brown' }, stats: ['7', '88'] }] },
       ] }],
     } : { teams: [], players: [] },
-    winprobability: isLive ? [1000, 1001, 1002, 1006, 1003, 1004, 1005].map((id, k) => ({ playId: String(id + 1), homeWinPercentage: [0.55, 0.52, 0.5, 0.47, 0.58, 0.66, 0.63][k] })) : undefined,
+    winprobability: isLive ? [...FILL.map((f) => ({ playId: f.play.id, homeWinPercentage: f.wp })), ...[1000, 1001, 1002, 1006, 1003, 1004, 1005].map((id, k) => ({ playId: String(id + 1), homeWinPercentage: [0.55, 0.52, 0.5, 0.47, 0.58, 0.66, 0.63][k] }))] : undefined,
   };
 }
 

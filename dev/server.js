@@ -32,6 +32,33 @@ const mockAI = (body) => {
   return { id: 'msg_mock', type: 'message', role: 'assistant', model: body.model, content: [{ type: 'text', text: JSON.stringify(out) }], stop_reason: 'end_turn', stop_sequence: null, usage: { input_tokens: 1, output_tokens: 1 } };
 };
 
+// MOCK_DB=1 fakes the Upstash Redis database in memory, so accounts and alerts can be tried locally.
+const MEM = new Map();
+if (process.env.MOCK_DB) {
+  process.env.KV_REST_API_URL = `http://localhost:${PORT}/mock-redis`;
+  process.env.KV_REST_API_TOKEN = 'mock';
+}
+function mockRedis([cmd, key, ...a]) {
+  const now = Date.now();
+  const e = MEM.get(key); if (e && e.exp && e.exp < now) MEM.delete(key);
+  const get = () => MEM.get(key)?.v;
+  const put = (v, exp = MEM.get(key)?.exp) => MEM.set(key, { v, exp });
+  switch (String(cmd).toUpperCase()) {
+    case 'GET': return get() ?? null;
+    case 'SET': { const nx = a.includes('NX'); if (nx && get() !== undefined) return null; const i = a.indexOf('EX'); put(a[0], i > 0 ? now + Number(a[i + 1]) * 1000 : undefined); return 'OK'; }
+    case 'DEL': return MEM.delete(key) ? 1 : 0;
+    case 'INCR': { const v = Number(get() || 0) + 1; put(String(v)); return v; }
+    case 'EXPIRE': { const x = MEM.get(key); if (x) x.exp = now + Number(a[0]) * 1000; return x ? 1 : 0; }
+    case 'HSET': { const h = get() || {}; let n = 0; for (let i = 0; i < a.length; i += 2) { if (!(a[i] in h)) n++; h[a[i]] = a[i + 1]; } put(h); return n; }
+    case 'HGETALL': return Object.entries(get() || {}).flat();
+    case 'HDEL': { const h = get() || {}; let n = 0; for (const f of a) if (f in h) { delete h[f]; n++; } put(h); return n; }
+    case 'HLEN': return Object.keys(get() || {}).length;
+    case 'SADD': { const s = get() || []; let n = 0; for (const m of a) if (!s.includes(m)) { s.push(m); n++; } put(s); return n; }
+    case 'SMEMBERS': return get() || [];
+    default: throw new Error('mock redis: ' + cmd);
+  }
+}
+
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png' };
 
 http.createServer(async (req, res) => {
@@ -41,6 +68,11 @@ http.createServer(async (req, res) => {
     await new Promise((r) => setTimeout(r, 800));
     res.setHeader('content-type', 'application/json');
     return res.end(JSON.stringify(mockAI(JSON.parse(s))));
+  }
+  if (u.pathname.startsWith('/mock-redis')) {
+    let s = ''; for await (const c of req) s += c;
+    res.setHeader('content-type', 'application/json');
+    try { return res.end(JSON.stringify({ result: mockRedis(JSON.parse(s)) })); } catch (e) { return res.end(JSON.stringify({ error: e.message })); }
   }
   if (u.pathname.startsWith('/api/')) {
     const name = u.pathname.slice(5).replace(/[^a-z]/g, '');

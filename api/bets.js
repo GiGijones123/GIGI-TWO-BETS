@@ -1,58 +1,43 @@
-// Bet log storage. Uses a free Upstash Redis database when one is connected
-// in Vercel (Storage tab). Without it the site keeps bets on the phone instead.
-//
-// Optional: set BETS_PASSCODE in Vercel so only people who know it can add or change bets.
+// Bet log storage. Signed-in people get their bets saved to their account (free Upstash
+// Redis database connected in Vercel), so they show on any phone. Guests keep bets on the phone.
+import { hasDB, redis, readBody, currentUser, hashToObj } from '../lib/db.js';
 
-const URL_ = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
-const TOKEN = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
-const PASS = process.env.BETS_PASSCODE || '';
-const KEY = 'betsdaily:bets';
-
-async function redis(cmd) {
-  const r = await fetch(URL_, { method: 'POST', headers: { authorization: `Bearer ${TOKEN}`, 'content-type': 'application/json' }, body: JSON.stringify(cmd) });
-  const j = await r.json();
-  if (j.error) throw new Error(j.error);
-  return j.result;
-}
-
-const FIELDS = ['id', 'date', 'app', 'sport', 'desc', 'odds', 'stake', 'status', 'payout'];
+const FIELDS = ['id', 'date', 'app', 'sport', 'desc', 'odds', 'stake', 'status', 'payout', 'grade', 'legs'];
 const STATUS = ['pending', 'won', 'lost', 'push', 'cashout'];
+const s = (v, n) => String(v ?? '').slice(0, n);
 
+function cleanLeg(l) {
+  return { pick: s(l.pick, 120), gameId: s(l.gameId, 20), league: s(l.league, 8), kind: s(l.kind, 10), est: Number(l.est) || null, odds: Number(l.odds) || null, grade: s(l.grade, 2), game: s(l.game, 40), tried: !!l.tried };
+}
 function clean(b) {
   const out = {};
   for (const f of FIELDS) if (b[f] !== undefined) out[f] = b[f];
-  out.id = String(out.id || '').slice(0, 40);
-  out.desc = String(out.desc || '').slice(0, 200);
-  out.app = String(out.app || '').slice(0, 40);
-  out.sport = String(out.sport || '').slice(0, 20);
-  out.date = String(out.date || '').slice(0, 10);
+  out.id = s(out.id, 40);
+  out.desc = s(out.desc, 300);
+  out.app = s(out.app, 40);
+  out.sport = s(out.sport, 20);
+  out.date = s(out.date, 10);
   out.odds = Number(out.odds) || 0;
   out.stake = Math.max(0, Number(out.stake) || 0);
   out.payout = out.payout === undefined || out.payout === null || out.payout === '' ? null : Number(out.payout);
   out.status = STATUS.includes(out.status) ? out.status : 'pending';
+  out.grade = s(out.grade, 2);
+  out.legs = Array.isArray(out.legs) ? out.legs.slice(0, 20).map(cleanLeg) : [];
   return out;
-}
-
-async function readBody(req) {
-  if (req.body && typeof req.body === 'object') return req.body;
-  if (typeof req.body === 'string') return JSON.parse(req.body || '{}');
-  const chunks = [];
-  for await (const c of req) chunks.push(c);
-  return JSON.parse(Buffer.concat(chunks).toString() || '{}');
 }
 
 export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store');
-  if (!URL_ || !TOKEN) return res.status(501).json({ error: 'No database connected', local: true, needsPass: !!PASS });
+  if (!hasDB()) return res.status(501).json({ error: 'No database connected', local: true });
   try {
+    const user = await currentUser(req);
+    if (!user) return res.status(501).json({ error: 'Not signed in', local: true, guest: true });
+    const KEY = `bets:${user.id}`;
     if (req.method === 'GET') {
-      const h = (await redis(['HGETALL', KEY])) || [];
-      const bets = [];
-      for (let i = 1; i < h.length; i += 2) { try { bets.push(JSON.parse(h[i])); } catch {} }
+      const bets = Object.values(hashToObj(await redis(['HGETALL', KEY])));
       bets.sort((a, b) => String(b.date).localeCompare(String(a.date)));
-      return res.status(200).json({ bets, needsPass: !!PASS });
+      return res.status(200).json({ bets });
     }
-    if (PASS && req.headers['x-bets-pass'] !== PASS) return res.status(401).json({ error: 'Wrong passcode' });
     if (req.method === 'POST') {
       const body = await readBody(req);
       const list = Array.isArray(body.bets) ? body.bets : [body];

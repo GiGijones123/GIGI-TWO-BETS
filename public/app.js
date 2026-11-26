@@ -24,7 +24,7 @@ const S = {
   filter: store.get('filter', 'all'),
   gameTab: 'matchup', side: 'away', unit: 'offense',
   bets: [], betsMode: 'local', betsNeedPass: false, period: 'week',
-  lastSeen: {}, flash: new Set(), pickLists: {}, slip: [], autoProps: {},
+  lastSeen: {}, flash: new Set(), pickLists: {}, slip: [], autoProps: {}, user: null, noDB: false,
 };
 
 async function api(path, opts) {
@@ -372,6 +372,7 @@ function route() {
   if (a === 'guide') return { name: 'guide' };
   if (a === 'builder') return { name: 'builder' };
   if (a === 'season') return { name: 'season' };
+  if (a === 'share' && b) return { name: 'share', code: b };
   return { name: 'games' };
 }
 function setTab(name) {
@@ -381,7 +382,7 @@ let gameTimer = null;
 function render() {
   const r = route();
   clearTimeout(gameTimer);
-  setTab(r.name === 'game' || r.name === 'season' ? 'games' : r.name === 'guide' ? 'bets' : r.name);
+  setTab(r.name === 'game' || r.name === 'season' ? 'games' : r.name === 'guide' ? 'bets' : r.name === 'share' ? 'builder' : r.name);
   if (r.name === 'games') renderGames();
   else if (r.name === 'game') renderGame(r);
   else if (r.name === 'season') renderSeason();
@@ -389,7 +390,9 @@ function render() {
   else if (r.name === 'check') renderCheck();
   else if (r.name === 'guide') renderGuide();
   else if (r.name === 'builder') renderBuilder();
+  else if (r.name === 'share') renderShare(r);
   else renderNews();
+  const v = $('#view'); v.classList.remove('enter'); void v.offsetWidth; v.classList.add('enter');
 }
 function onData() {
   const r = route();
@@ -403,6 +406,7 @@ function onData() {
 function renderGames() {
   const v = $('#view');
   v.innerHTML = `
+    ${homeBanner()}
     ${viewSwitch('today')}
     <div id="myOpen"></div>
     <div id="tickerWrap"></div>
@@ -533,6 +537,7 @@ async function renderGame(r) {
   const v = $('#view');
   v.innerHTML = `<button class="back" data-back>‹ All games</button><div id="hero"><div class="skel" style="height:260px"></div></div>
     <div id="gpick"></div>
+    <div id="wpBox"></div>
     <div class="stick"><div class="seg" id="gtabs">${['matchup', 'lineups', 'plays'].map((t) => `<button data-gtab="${t}" aria-pressed="${S.gameTab === t}">${t === 'matchup' ? 'Matchup' : t === 'lineups' ? 'Lineups' : 'Play by play'}</button>`).join('')}</div></div>
     <div id="gbody"><div class="skel"></div></div>`;
   window.scrollTo(0, 0);
@@ -612,6 +617,7 @@ function renderGameLive(r) {
   // freshest of scoreboard and summary
   const g = sb && sum ? { ...sum.game, ...sb, odds: sb.odds || sum.game.odds } : sb || sum?.game;
   if (!g) return;
+  if (g.state !== 'pre' && sum?.game?.wpLine?.length > 1) wpMount(g, sum.game.wpLine);
   const live = g.state === 'in';
   const post = g.state === 'post';
   let mid;
@@ -1282,7 +1288,7 @@ function drawBets() {
     </form>
     </div>
     ${done.length ? `<h2>Settled <span class="count">${done.length}</span></h2><div style="display:grid;gap:8px">${done.map(row).join('')}</div>` : ''}
-    <div class="note" style="margin-top:14px">${S.betsMode === 'cloud' ? '☁️ Saved to your free database, so you see the same bets on any device.' : '📱 Saved on this phone.'}</div>
+    <div class="note" style="margin-top:14px">${S.betsMode === 'cloud' ? '☁️ Saved to your account, so you see the same bets on any phone.' : `📱 Saved on this phone.${S.noDB ? '' : ' <a href="#" data-wlopen="signup">Make a free account</a> to keep them on any phone.'}`}</div>
     ${S.betsMode === 'cloud' && localCount ? `<button style="margin-top:8px" data-migrate>Move ${localCount} bets from this phone to the cloud</button>` : ''}`;
     })()}`;
 }
@@ -1504,7 +1510,7 @@ function drawSlip() {
     <div class="legs">${legs.map((x) => { const gr = gradeOf(x.est, x.odds); return `<div class="leg"><span class="grade g${gr}">${gr}</span><div><b>${esc(x.pick)}</b><small>${esc(x.game)} · ${x.est}% · ${esc(ml(x.odds))}</small></div><button class="ghost x" data-addleg="${esc(x.id)}" aria-label="Remove">✕</button></div>`; }).join('')}</div>
     <ul class="tips">${pg.notes.map((n) => `<li>${esc(n)}</li>`).join('')}</ul>
     <form id="slipForm" class="slipbet"><label class="appsel">App<select name="app">${['DraftKings', 'FanDuel', 'PrizePicks', 'Other'].map((a) => `<option ${store.get('lastApp', 'DraftKings') === a ? 'selected' : ''}>${a}</option>`).join('')}</select></label><label>Bet ($)<input name="stake" inputmode="decimal" value="${stake}"></label><div class="pays">Pays <b>${usd(stake * pg.dec)}</b>${unit ? `<small>${(stake / unit).toFixed(2).replace(/\.?0+$/, '')} units</small>` : ''}</div><button class="pri" type="submit">Save to My bets</button></form>
-    <div class="ckbtns"><button data-autobuild>⚡ Rebuild for me</button><button data-clearslip>Clear</button></div>
+    <div class="ckbtns"><button data-shareslip>🔗 Share</button><button data-autobuild>⚡ Rebuild</button><button data-clearslip>Clear</button></div>
     <p class="est">Grades and chances are estimates from ESPN numbers, not sure things.</p></div>`;
 }
 
@@ -1739,6 +1745,7 @@ function openBet(id, again = false) {
     ${(() => { const bc = betChance(b); if (!bc || b.status !== 'pending') return ''; const pc = Math.round(bc.p * 100); return `<div class="betodds"><div class="hbtop"><b>${pctTxt(bc.p)}</b><span>${legs.length > 1 ? 'chance the parlay hits' : 'chance this hits'}${bc.live ? ' · live' : ' · before kickoff'}${bc.partial ? ' · props not counted' : ''}</span></div><div class="hbbar"><i style="width:${pc}%;background:${pc >= 60 ? 'var(--win)' : pc >= 35 ? 'var(--warn)' : 'var(--loss)'}"></i></div></div>`; })()}
     <h2 style="margin-top:14px">Your picks <span class="count">${legs.length}</span></h2>
     <div class="oblegs">${rows}</div>
+    ${legs.some((l) => l.gameId) ? `<button class="sharebtn" data-sharebet="${esc(b.id)}">🔗 Send this ${legs.length > 1 ? 'parlay' : 'pick'} to a friend</button>` : ''}
     <p class="est" style="margin-top:12px">Winning or losing is worked out from the live score for sides and totals. Player props: check the player's card.</p></div>`;
   dlg._bet = id;
   if (again && keep) $('.sheet', dlg).scrollTop = keep;
@@ -1773,6 +1780,28 @@ document.addEventListener('click', async (e) => {
   }
   const t = e.target.closest('button, a');
   if (!t) return;
+  if (t.id === 'acct') { openAccount(); return; }
+  if (t.dataset.wlmode) { showWelcome(t.dataset.wlmode); $('#wlForm input')?.focus(); return; }
+  if (t.hasAttribute('data-wlskip')) { hideWelcome(); return; }
+  if (t.dataset.wlopen) { e.preventDefault(); if ($('#sheet').open) $('#sheet').close(); showWelcome(t.dataset.wlopen); return; }
+  if (t.hasAttribute('data-logout')) { await Auth.go('logout', {}).catch(() => {}); S.user = null; acctBtn(); $('#sheet').close(); toast('Logged out'); await Bets.load(); render(); return; }
+  if (t.hasAttribute('data-alerton')) { t.disabled = true; t.textContent = 'Turning on…'; try { await alertsOn(); toast('Alerts are on 🔔'); } catch (err) { toast(err.message); } openAccount(); return; }
+  if (t.hasAttribute('data-alertoff')) { await alertsOff(); toast('Alerts are off'); openAccount(); return; }
+  if (t.hasAttribute('data-alerttest')) { const r = await fetch('/api/push', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'test' }) }).then((x) => x.json()).catch(() => ({})); toast(r.sent ? 'Test sent. Check your notifications.' : 'Could not send. Try turning alerts off and on.'); return; }
+  if (t.hasAttribute('data-install')) { S.installEvt?.prompt(); S.installEvt = null; return; }
+  if (t.hasAttribute('data-homehow')) { openAccount(); return; }
+  if (t.hasAttribute('data-homehide')) { store.set('hideHome', true); t.closest('.homebn')?.remove(); return; }
+  if (t.hasAttribute('data-shareslip')) { const f = $('#slipForm'); shareParlay(S.slip, { app: f ? new FormData(f).get('app') : '', stake: f ? Number(new FormData(f).get('stake')) : 0 }); return; }
+  if (t.dataset.sharebet) { const b = S.bets.find((x) => x.id === t.dataset.sharebet); if (b) shareParlay(betLegs(b), { app: b.app, stake: b.stake }); return; }
+  if (t.hasAttribute('data-sharecopy')) { const sh = $('#view')._share; if (sh) { S.slip = sh.legs.map((x) => ({ ...x, game: x.game || '' })); slipSave(); location.hash = '#/builder'; } return; }
+  if (t.hasAttribute('data-sharesave')) {
+    const sh = $('#view')._share; if (!sh) return;
+    const pg = parlayGrade(sh.legs);
+    const bet = { id: `b${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`, date: today(), app: sh.app || 'Other', sport: [...new Set(sh.legs.map((x) => LG[x.league]?.label || 'Other'))].length === 1 ? (LG[sh.legs[0].league]?.label || 'Other') : 'Other', desc: sh.legs.length === 1 ? sh.legs[0].pick : `${sh.legs.length}-leg parlay (grade ${pg.grade}): ${sh.legs.map((x) => x.pick).join('; ')}`, odds: pg.am, stake: sh.stake || 0, status: 'pending', payout: sh.stake ? Math.round(sh.stake * pg.dec * 100) / 100 : null, grade: pg.grade, legs: sh.legs.map((x) => ({ pick: x.pick, game: x.game, gameId: x.gameId, league: x.league, kind: x.kind, est: x.est, odds: x.odds, grade: gradeOf(x.est, x.odds) })) };
+    await Bets.load();
+    try { await Bets.put([bet]); } catch (err) { toast(err.message); return; }
+    toast('Saved to My bets ✓'); location.hash = '#/bets'; return;
+  }
   if (t.dataset.go) { if ($('#sheet').open) $('#sheet').close(); location.hash = `#/game/${t.dataset.go}`; return; }
   if (t.hasAttribute('data-back')) { if (history.length > 1) history.back(); else location.hash = '#/'; return; }
   if (t.dataset.filter) { S.filter = t.dataset.filter; store.set('filter', S.filter); $$('#chips button').forEach((b) => b.setAttribute('aria-pressed', b.dataset.filter === S.filter)); renderGamesBody(); return; }
@@ -1829,6 +1858,7 @@ document.addEventListener('change', async (e) => {
   drawBets();
 });
 document.addEventListener('submit', async (e) => {
+  if (e.target.id === 'wlForm') { e.preventDefault(); submitWelcome(e.target); return; }
   if (e.target.id === 'slipForm') {
     e.preventDefault();
     const stake = Number(new FormData(e.target).get('stake')) || 0;
@@ -1872,9 +1902,283 @@ setInterval(() => { if (S.updated && !S.err && !S.games.some((g) => g.state === 
 // refresh right away when coming back to the app
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { loadScoreboard(); const r = route(); if (r.name === 'game') loadSum(r.league, r.id, 0).then(() => renderGameLive(r)); } });
 
+// ---------- ACCOUNTS ----------
+// Sign up / log in. Bets follow the account to any phone. Guests keep bets on this phone.
+const Auth = {
+  async me() {
+    try {
+      const r = await fetch('/api/auth', { cache: 'no-store' });
+      if (r.status === 501) { S.noDB = true; S.user = null; return null; }
+      const j = await r.json(); S.noDB = false; S.user = j.user || null; return S.user;
+    } catch { S.user = null; return null; }
+  },
+  async go(action, data) {
+    const r = await fetch('/api/auth', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action, ...data }) });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.error || 'Something went wrong. Try again.');
+    return j;
+  },
+};
+function acctBtn() {
+  const b = $('#acct');
+  if (!b) return;
+  b.innerHTML = S.user ? `<span class="av">${esc(initials(S.user.name))}</span>` : '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg>';
+  b.setAttribute('aria-label', S.user ? `Account: ${S.user.name}` : 'Log in or sign up');
+}
+// Move bets saved on this phone into the account, once.
+async function moveLocalBets() {
+  const local = Bets.local();
+  if (!S.user || !local.length || store.get('movedTo', '') === S.user.id) return;
+  const r = await fetch('/api/bets', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ bets: local }) });
+  if (r.ok) store.set('movedTo', S.user.id);
+}
+function welcomeHTML(mode) {
+  const noDB = S.noDB;
+  return `<div class="wl-card">
+    <img class="wl-logo" src="/icon.svg" alt="">
+    <h1 class="wl-name">GIGI<b>PICKS</b></h1>
+    <p class="wl-tag">Smarter picks, live plays and a tracker for every bet.</p>
+    <ul class="wl-points"><li>🎯 Picks graded A to F</li><li>📈 Live chance your parlay hits</li><li>🔔 Alerts when your picks hit</li></ul>
+    ${noDB ? `<p class="wl-note">Accounts are almost ready. They turn on as soon as the free database is connected.</p><button class="pri wl-go" data-wlskip>Let's go</button>` : `
+    <div class="seg wl-seg"><button data-wlmode="signup" aria-pressed="${mode === 'signup'}">Sign up</button><button data-wlmode="login" aria-pressed="${mode === 'login'}">Log in</button></div>
+    <form id="wlForm" class="wl-form" data-mode="${mode}" novalidate>
+      ${mode === 'signup' ? '<label>Name<input name="name" autocomplete="given-name" required maxlength="40" placeholder="Your first name"></label>' : ''}
+      <label>Email<input name="email" type="email" inputmode="email" autocomplete="email" required placeholder="you@email.com"></label>
+      <label>Password<input name="password" type="password" autocomplete="${mode === 'signup' ? 'new-password' : 'current-password'}" required minlength="8" placeholder="${mode === 'signup' ? 'At least 8 characters' : 'Your password'}"></label>
+      <div class="wl-err" id="wlErr" role="alert"></div>
+      <button class="pri" type="submit">${mode === 'signup' ? 'Create my account' : 'Log in'}</button>
+    </form>
+    <button class="ghost wl-skip" data-wlskip>Just look around first</button>`}
+    <p class="wl-fine">Not a sportsbook. You place bets in your own apps; GIGI Picks helps you choose and keeps track. Picks are estimates.</p>
+  </div>`;
+}
+function showWelcome(mode = 'signup') {
+  let w = $('#welcome');
+  if (!w) { w = document.createElement('div'); w.id = 'welcome'; w.setAttribute('role', 'dialog'); w.setAttribute('aria-label', 'Welcome to GIGI Picks'); document.body.appendChild(w); }
+  w.innerHTML = welcomeHTML(mode);
+  w.hidden = false;
+  document.body.classList.add('wl-open');
+  requestAnimationFrame(() => w.classList.add('in'));
+}
+function hideWelcome() {
+  const w = $('#welcome'); if (!w) return;
+  store.set('welcomed', true);
+  w.classList.remove('in');
+  document.body.classList.remove('wl-open');
+  setTimeout(() => { w.hidden = true; }, 250);
+}
+async function submitWelcome(form) {
+  const mode = form.dataset.mode;
+  const f = Object.fromEntries(new FormData(form));
+  const err = $('#wlErr');
+  const btn = form.querySelector('button[type=submit]');
+  err.textContent = '';
+  if (mode === 'signup' && !String(f.name || '').trim()) { err.textContent = 'Add your name.'; return; }
+  if (!/^\S+@\S+\.\S+$/.test(f.email || '')) { err.textContent = 'Enter a real email address.'; return; }
+  if (String(f.password || '').length < 8) { err.textContent = 'Passwords are at least 8 characters.'; return; }
+  btn.disabled = true; btn.textContent = mode === 'signup' ? 'Creating…' : 'Logging in…';
+  try {
+    const j = await Auth.go(mode, f);
+    S.user = j.user;
+    await moveLocalBets();
+    acctBtn();
+    hideWelcome();
+    toast(mode === 'signup' ? `Welcome, ${S.user.name}! 🎉` : `Welcome back, ${S.user.name}`);
+    await Bets.load();
+    render();
+  } catch (e2) {
+    err.textContent = e2.message;
+    btn.disabled = false; btn.textContent = mode === 'signup' ? 'Create my account' : 'Log in';
+  }
+}
+
+// ---------- ALERTS (Web Push) ----------
+const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const isStandalone = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+const pushOK = () => 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+function b64ToBytes(s) { const p = '='.repeat((4 - (s.length % 4)) % 4); const raw = atob((s + p).replace(/-/g, '+').replace(/_/g, '/')); return Uint8Array.from(raw, (c) => c.charCodeAt(0)); }
+async function swReg() { if (!('serviceWorker' in navigator)) return null; try { return await navigator.serviceWorker.register('/sw.js'); } catch { return null; } }
+async function alertsState() {
+  if (!pushOK()) return isIOS && !isStandalone() ? 'needs-home' : 'unsupported';
+  if (Notification.permission === 'denied') return 'blocked';
+  const reg = await navigator.serviceWorker.getRegistration();
+  const sub = await reg?.pushManager.getSubscription();
+  return sub && Notification.permission === 'granted' ? 'on' : 'off';
+}
+async function alertsOn() {
+  const perm = await Notification.requestPermission();
+  if (perm !== 'granted') throw new Error('Alerts were not allowed. You can allow them in your phone settings.');
+  const reg = await swReg();
+  if (!reg) throw new Error('This browser cannot do alerts.');
+  await navigator.serviceWorker.ready;
+  const { publicKey } = await fetch('/api/push').then((r) => r.json());
+  let sub = await reg.pushManager.getSubscription();
+  if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToBytes(publicKey) });
+  const r = await fetch('/api/push', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'subscribe', subscription: sub.toJSON() }) });
+  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Could not turn on alerts.');
+}
+async function alertsOff() {
+  const reg = await navigator.serviceWorker.getRegistration();
+  const sub = await reg?.pushManager.getSubscription();
+  if (sub) { await fetch('/api/push', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'unsubscribe', endpoint: sub.endpoint }) }).catch(() => {}); await sub.unsubscribe(); }
+}
+// While the site is open during a live game, nudge the alert checker too (it runs at most once a minute).
+setInterval(() => { if (S.user && document.visibilityState === 'visible' && S.games.some((g) => g.state === 'in')) fetch('/api/notify').catch(() => {}); }, 90e3);
+
+const homeSteps = () => (isIOS
+  ? '<ol class="steps"><li>Tap the <b>Share</b> button <span class="kbd">⬆︎</span> at the bottom of Safari.</li><li>Scroll down and tap <b>Add to Home Screen</b>.</li><li>Tap <b>Add</b>. Open GIGI Picks from your home screen from now on.</li></ol>'
+  : S.installEvt ? '<button class="pri" data-install>📲 Add GIGI Picks to my home screen</button>' : '<ol class="steps"><li>Tap the browser menu <span class="kbd">⋮</span>.</li><li>Tap <b>Add to Home screen</b> or <b>Install app</b>.</li></ol>');
+window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); S.installEvt = e; });
+
+async function openAccount() {
+  const dlg = $('#sheet');
+  dlg._bet = null;
+  const st = await alertsState();
+  const alertBox = !S.user ? '<p class="est">Log in to get alerts on your phone.</p>'
+    : st === 'needs-home' ? `<p>On iPhone, alerts work once GIGI Picks is on your home screen:</p>${homeSteps()}`
+    : st === 'unsupported' ? '<p class="est">This browser can’t show alerts. Try Safari on iPhone or Chrome on Android.</p>'
+    : st === 'blocked' ? '<p class="est">Alerts are blocked for this site. Turn them on in your phone’s settings for this browser, then come back.</p>'
+    : st === 'on' ? '<div class="alert-on">🔔 Alerts are on for this phone</div><div class="ckbtns"><button data-alerttest>Send a test</button><button data-alertoff>Turn off</button></div>'
+    : '<button class="pri" data-alerton>🔔 Turn on alerts</button>';
+  dlg.innerHTML = `<div class="sheet"><div class="grab"><button data-close>Close</button></div>
+    ${S.user ? `<div class="acct-head"><span class="av big">${esc(initials(S.user.name))}</span><div><h3>${esc(S.user.name)}</h3><div class="est">${esc(S.user.email)}</div></div></div>
+      <div class="acct-row">☁️ Your bets are saved to your account, so they show on any phone you log in on.</div>`
+    : `<h3>Your account</h3><p class="sub" style="margin-top:6px">Make a free account so your bets follow you and you can get alerts.</p><div class="ckbtns"><button class="pri" data-wlopen="signup">Sign up</button><button data-wlopen="login">Log in</button></div>`}
+    <h2>Alerts</h2>
+    <p class="est" style="margin-top:-4px">We ping you when a game with your pick starts, when a pick hits or misses, when it’s down to the wire, and when you’re one leg away.</p>
+    <div id="alertBox">${alertBox}</div>
+    ${!isStandalone() ? `<h2>Open it like an app</h2><p class="est" style="margin-top:-4px">Put GIGI Picks on your home screen. It opens full screen, like an app, no App Store needed.</p>${homeSteps()}` : ''}
+    ${S.user ? '<button class="ghost logout" data-logout>Log out</button>' : ''}
+  </div>`;
+  if (!dlg.open) dlg.showModal();
+}
+
+// ---------- SHARE A PARLAY ----------
+// The whole parlay rides inside the link, so there is nothing to store.
+const b64url = (s) => btoa(String.fromCharCode(...new TextEncoder().encode(s))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+const unb64url = (s) => new TextDecoder().decode(Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - (s.length % 4)) % 4)), (c) => c.charCodeAt(0)));
+function shareCode(legs, meta = {}) {
+  return b64url(JSON.stringify({ v: 1, n: meta.name || S.user?.name || '', a: meta.app || '', s: meta.stake || 0, l: legs.map((x) => [x.pick, x.league || '', x.gameId || '', x.est || 0, x.odds || 0, x.kind || '', x.game || '']) }));
+}
+function readShare(code) {
+  try {
+    const j = JSON.parse(unb64url(code));
+    return { name: String(j.n || '').slice(0, 40), app: String(j.a || '').slice(0, 30), stake: Number(j.s) || 0, legs: (j.l || []).slice(0, 15).map((x, i) => ({ id: `${x[2] || 'x'}:shared:${i}`, pick: String(x[0] || '').slice(0, 120), league: LG[x[1]] ? x[1] : '', gameId: String(x[2] || '').replace(/\D/g, ''), est: Number(x[3]) || 0, odds: Number(x[4]) || -110, kind: String(x[5] || ''), game: String(x[6] || '').slice(0, 40) })) };
+  } catch { return null; }
+}
+async function shareParlay(legs, meta) {
+  if (!legs.length) return;
+  const url = `${location.origin}/#/share/${shareCode(legs, meta)}`;
+  const text = `${meta?.name || S.user?.name || 'Someone'} shared a ${legs.length > 1 ? `${legs.length}-leg parlay` : 'pick'} on GIGI Picks`;
+  try {
+    if (navigator.share) { await navigator.share({ title: 'GIGI Picks parlay', text, url }); return; }
+  } catch (e) { if (e.name === 'AbortError') return; }
+  try { await navigator.clipboard.writeText(url); toast('Link copied. Paste it to a friend 📋'); }
+  catch { prompt('Copy this link', url); }
+}
+async function renderShare(r) {
+  const v = $('#view');
+  const sh = readShare(r.code || '');
+  if (!sh || !sh.legs.length) { v.innerHTML = '<h1>Shared parlay</h1><div class="empty">This link looks broken. Ask your friend to send it again.</div>'; return; }
+  const draw = () => {
+    if (route().name !== 'share') return;
+    const pg = parlayGrade(sh.legs);
+    const fake = { legs: sh.legs, odds: pg.am, stake: sh.stake };
+    const bc = betChance(fake);
+    v.innerHTML = `<h1>${sh.name ? `${esc(sh.name)}'s parlay` : 'Shared parlay'}</h1>
+      <p class="sub">${sh.legs.length > 1 ? `${sh.legs.length} picks` : '1 pick'}${sh.app ? ` · ${esc(sh.app)}` : ''}${sh.stake ? ` · $${esc(sh.stake)} bet` : ''}</p>
+      <div class="slip">
+        <div class="slipgrade"><span class="grade big g${pg.grade}">${pg.grade}</span><div><b>${sh.legs.length === 1 ? 'Straight bet' : `${sh.legs.length}-leg parlay`} · ${esc(ml(pg.am))}</b><small>${bc ? `${pctTxt(bc.p)} chance to hit${bc.live ? ' · live' : ''}` : 'Chance shows once games load'}</small></div></div>
+        ${bc ? `<div class="hbbar"><i style="width:${Math.round(bc.p * 100)}%;background:${bc.p >= 0.6 ? 'var(--win)' : bc.p >= 0.35 ? 'var(--warn)' : 'var(--loss)'}"></i></div>` : ''}
+        <div class="legs">${sh.legs.map((x) => { const g = findLegGame(x); const st = legStatus(x, g); const gr = x.est ? gradeOf(x.est, x.odds) : '–'; return `<div class="leg"><span class="grade g${gr}">${gr}</span><div><b>${esc(x.pick)}</b><small>${esc([x.game || (g ? `${g.away.abbr} @ ${g.home.abbr}` : ''), x.est ? `${x.est}%` : '', ml(x.odds)].filter(Boolean).join(' · '))}</small>${st ? `<small class="lst ${st.cls}">${esc(st.text)}</small>` : ''}</div>${g ? `<button class="ghost golink" data-go="${esc(g.league)}/${esc(g.id)}">Game ›</button>` : ''}</div>`; }).join('')}</div>
+        <div class="ckbtns"><button class="pri" data-sharecopy>🧱 Open in my Builder</button><button data-sharesave>Save to My bets</button></div>
+        <p class="est">Grades and chances are estimates from ESPN numbers.</p>
+      </div>
+      ${!S.user && !S.noDB ? '<div class="homebn" style="margin-top:14px"><span>🎯</span><div><b>Make your own picks</b><small>Free account: grades, live chances and alerts.</small></div><button class="pri" data-wlopen="signup">Sign up</button></div>' : ''}`;
+  };
+  v._share = sh;
+  draw();
+  if (!S.games.length) await loadScoreboard().catch(() => {});
+  draw();
+}
+
+// ---------- WIN CHANCE CHART ----------
+// Slide a finger along the line to see the score, clock and play at any moment of the game.
+function wpChartHTML(g, line) {
+  if (!line || line.length < 2) return '';
+  const W = 340; const H = 120; const total = Math.max(g.wpLen || 60, line[line.length - 1].x);
+  const X = (x) => (x / total) * W; const Y = (h) => H - (h / 100) * H;
+  const d = line.map((p, i) => `${i ? 'L' : 'M'}${X(p.x).toFixed(1)},${Y(p.h).toFixed(1)}`).join('');
+  const [ca, ch] = colors(g);
+  const qs = [1, 2, 3].map((q) => `<line x1="${X((total / 4) * q)}" x2="${X((total / 4) * q)}" y1="0" y2="${H}" class="wq"/>`).join('');
+  const scores = line.filter((p) => p.sc).map((p) => `<circle cx="${X(p.x).toFixed(1)}" cy="${Y(p.h).toFixed(1)}" r="2.6" class="wsc"/>`).join('');
+  return `<div class="wpcard sec" id="wpCard" data-total="${total}">
+    <div class="hd"><h3>Win chance</h3><span class="est">slide along the line</span></div>
+    <div class="wpinfo" id="wpInfo"></div>
+    <div class="wpwrap"><svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" class="wpsvg" id="wpSvg" aria-label="Win chance through the game">
+      <defs><clipPath id="wpTop"><rect x="0" y="0" width="${W}" height="${H / 2}"/></clipPath><clipPath id="wpBot"><rect x="0" y="${H / 2}" width="${W}" height="${H / 2}"/></clipPath></defs>
+      ${qs}<line x1="0" x2="${W}" y1="${H / 2}" y2="${H / 2}" class="wmid"/>
+      <path d="${d}L${X(line[line.length - 1].x).toFixed(1)},${H / 2}L0,${H / 2}Z" fill="${esc(ch)}" opacity=".28" clip-path="url(#wpTop)"/>
+      <path d="${d}L${X(line[line.length - 1].x).toFixed(1)},${H / 2}L0,${H / 2}Z" fill="${esc(ca)}" opacity=".28" clip-path="url(#wpBot)"/>
+      <path d="${d}" fill="none" stroke="#fff" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linejoin="round"/>
+      ${scores}
+      <line id="wpCur" x1="0" x2="0" y1="0" y2="${H}" class="wcur"/>
+    </svg><span class="wpdot" id="wpDot"></span></div>
+    <div class="wpteams"><span style="color:${esc(ch)}">${esc(g.home.abbr)} ↑</span><span style="color:${esc(ca)}">${esc(g.away.abbr)} ↓</span></div>
+  </div>`;
+}
+function wpShow(i) {
+  const card = $('#wpCard'); const line = card?._line; const g = card?._g;
+  if (!line || !g) return;
+  const p = line[clamp(i, 0, line.length - 1)];
+  const total = Number(card.dataset.total);
+  const fx = p.x / total; const fy = 1 - p.h / 100;
+  const cur = $('#wpCur'); const W = 340;
+  cur.setAttribute('x1', fx * W); cur.setAttribute('x2', fx * W);
+  const dot = $('#wpDot'); dot.style.left = `${fx * 100}%`; dot.style.top = `${fy * 100}%`;
+  const fav = p.h >= 50 ? g.home : g.away; const pc = p.h >= 50 ? p.h : 100 - p.h;
+  $('#wpInfo').innerHTML = `<div class="wpi1"><b>${esc(fav.abbr)} ${Math.round(pc)}%</b><span>${esc(p.c)}${p.a !== null ? ` · ${esc(g.away.abbr)} ${p.a}-${p.s} ${esc(g.home.abbr)}` : ''}</span></div><div class="wpi2">${p.sc ? '🔥 ' : ''}${esc(p.t)}</div>`;
+}
+function wpMount(g, line) {
+  const box = $('#wpBox');
+  if (!box) return;
+  const key = `${g.id}:${line?.length || 0}`;
+  if (box._k === key) return;
+  box._k = key;
+  const touching = box._touch;
+  box.innerHTML = wpChartHTML(g, line);
+  const card = $('#wpCard');
+  if (!card) return;
+  card._line = line; card._g = g;
+  wpShow(line.length - 1);
+  const svgWrap = $('.wpwrap', card);
+  const at = (clientX) => { const r = svgWrap.getBoundingClientRect(); const x = clamp((clientX - r.left) / r.width, 0, 1) * Number(card.dataset.total); let best = 0; for (let i = 1; i < line.length; i++) if (Math.abs(line[i].x - x) < Math.abs(line[best].x - x)) best = i; return best; };
+  svgWrap.addEventListener('pointerdown', (e) => { box._touch = true; svgWrap.setPointerCapture(e.pointerId); wpShow(at(e.clientX)); });
+  svgWrap.addEventListener('pointermove', (e) => { if (box._touch || e.pointerType === 'mouse') wpShow(at(e.clientX)); });
+  const end = () => { box._touch = false; };
+  svgWrap.addEventListener('pointerup', end); svgWrap.addEventListener('pointercancel', end);
+  svgWrap.addEventListener('mouseleave', () => wpShow(line.length - 1));
+  if (touching) box._touch = true;
+}
+
+// ---------- LITTLE THINGS ----------
+function toast(msg) {
+  let t = $('#toast');
+  if (!t) { t = document.createElement('div'); t.id = 'toast'; t.setAttribute('role', 'status'); document.body.appendChild(t); }
+  t.textContent = msg;
+  t.classList.remove('show'); void t.offsetWidth; t.classList.add('show');
+  clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), 2600);
+}
+function homeBanner() {
+  if (isStandalone() || store.get('hideHome', false) || !/android|iphone|ipad|ipod/i.test(navigator.userAgent + (isIOS ? 'iphone' : ''))) return '';
+  return `<div class="homebn"><span>📲</span><div><b>Add GIGI Picks to your home screen</b><small>Opens like an app${S.user ? ' and can send you alerts' : ''}.</small></div><button data-homehow>How</button><button class="ghost x" data-homehide aria-label="Hide">✕</button></div>`;
+}
+
 window.addEventListener('hashchange', render);
 (async () => {
   render();
+  swReg();
+  Auth.me().then(() => { acctBtn(); if (!S.user && !store.get('welcomed', false) && route().name !== 'share') showWelcome('signup'); if (S.user) moveLocalBets().then(() => Bets.load()).then(() => { if (route().name === 'bets') render(); }); });
   Bets.load().then(() => { if (route().name === 'games') renderGamesBody(); fillAllOpen(); }).catch((e) => console.warn('open bets strip', e));
   await loadDaily();
   loadScoreboard();
