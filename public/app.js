@@ -406,7 +406,6 @@ function onData() {
 function renderGames() {
   const v = $('#view');
   v.innerHTML = `
-    ${homeBanner()}
     ${viewSwitch('today')}
     <div id="myOpen"></div>
     <div id="tickerWrap"></div>
@@ -2047,7 +2046,6 @@ async function openAccount() {
     <h2>Alerts</h2>
     <p class="est" style="margin-top:-4px">We ping you when a game with your pick starts, when a pick hits or misses, when it’s down to the wire, and when you’re one leg away.</p>
     <div id="alertBox">${alertBox}</div>
-    ${!isStandalone() ? `<h2>Open it like an app</h2><p class="est" style="margin-top:-4px">Put GIGI Picks on your home screen. It opens full screen, like an app, no App Store needed.</p>${homeSteps()}` : ''}
     ${S.user ? '<button class="ghost logout" data-logout>Log out</button>' : ''}
   </div>`;
   if (!dlg.open) dlg.showModal();
