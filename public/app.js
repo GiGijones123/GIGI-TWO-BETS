@@ -24,7 +24,7 @@ const S = {
   filter: store.get('filter', 'all'),
   gameTab: 'matchup', side: 'away', unit: 'offense',
   bets: [], betsMode: 'local', betsNeedPass: false, period: 'week',
-  lastSeen: {}, flash: new Set(),
+  lastSeen: {}, flash: new Set(), pickLists: {}, slip: [],
 };
 
 async function api(path, opts) {
@@ -192,11 +192,41 @@ function estimate(g, sum, nA, nH, { ignoreHurt = false } = {}) {
   // A hand-picked pick stands until someone gets hurt; then the live numbers take over.
   if (cur && !(hurt.length && picks[0])) {
     if (hurt.length) reasons.push('Someone got hurt after this pick was made, so double-check it before betting.');
-    return { top: { pick: cur.pick, est: cur.est, odds: cur.odds, book: cur.book, why: cur.why, curated: true }, alt: picks, reasons, hurt };
+    const kind = /^(over|under)\b/i.test(cur.pick) ? 'total' : 'spread';
+    return { top: { pick: cur.pick, est: cur.est, odds: cur.odds, book: cur.book, why: cur.why, curated: true, kind }, alt: picks.filter((x) => x.kind !== kind), reasons, hurt };
   }
   // After an injury, lead with the side pick so it is clear how the injury moved it.
   if (cur && hurt.length) { const sp = picks.find((x) => x.kind === 'spread'); if (sp) return { top: sp, alt: picks.filter((x) => x !== sp), reasons, hurt }; }
   return { top: picks[0] || null, alt: picks.slice(1), reasons, hurt };
+}
+
+// ---------- grades + parlay math ----------
+// A pick's grade: how far its estimated chance is above what the odds need to break even.
+const decOdds = (am) => { const a = Number(am) || -110; return a > 0 ? 1 + a / 100 : 1 + 100 / Math.abs(a); };
+const amOdds = (dec) => (dec >= 2 ? Math.round((dec - 1) * 100) : Math.round(-100 / (dec - 1)));
+const breakEven = (am) => 100 / decOdds(am);
+function gradeOf(est, odds = -110) {
+  const edge = est - breakEven(odds);
+  return edge >= 6 ? 'A' : edge >= 3.5 ? 'B' : edge >= 1.5 ? 'C' : edge >= 0 ? 'D' : 'F';
+}
+const kindLabel = { spread: 'Side', total: 'Total', prop: 'Player prop' };
+
+// Every pick we have for one game (side, total, player props), best first.
+function gamePicks(g, sum, nA, nH) {
+  const e = estimate(g, sum, nA, nH);
+  const hurt = new Set((e.hurt || []).map((x) => x.name));
+  const out = new Set(Object.values(sum?.injuries || {}).flat().filter((i) => /out|injured reserve|\bir\b|doubt|susp/i.test(i.status)).map((i) => i.name));
+  const list = [];
+  const label = `${g.away.abbr} @ ${g.home.abbr}`;
+  for (const p of [e.top, ...e.alt].filter(Boolean)) {
+    const kind = p.kind || (/^(over|under)\b/i.test(p.pick) ? 'total' : 'spread');
+    list.push({ id: `${g.id}:${kind}:${p.pick}`, gameId: g.id, league: g.league, game: label, kind, pick: p.pick, est: p.est, odds: p.odds || -110, why: p.why || (kind === 'total' && p.proj ? `Season scoring points to about ${p.proj.toFixed(1)} total points.` : kind === 'spread' ? "From ESPN's win model and both teams' season scoring." : ''), curated: !!p.curated });
+  }
+  for (const x of (S.daily?.props || []).filter((y) => y.game === gameKey(g))) {
+    const bad = hurt.has(x.player) || out.has(x.player);
+    list.push({ id: `${g.id}:prop:${x.player}:${x.stat}`, gameId: g.id, league: g.league, game: label, kind: 'prop', pick: `${x.player} ${x.lean} ${x.line} ${String(x.stat).toLowerCase()}`, est: x.est, odds: x.odds || -115, why: x.why, bad });
+  }
+  return { e, list };
 }
 
 // ---------- data loading + live polling ----------
@@ -280,6 +310,7 @@ function route() {
   if (a === 'news') return { name: 'news' };
   if (a === 'check') return { name: 'check' };
   if (a === 'guide') return { name: 'guide' };
+  if (a === 'builder') return { name: 'builder' };
   if (a === 'season') return { name: 'season' };
   return { name: 'games' };
 }
@@ -297,6 +328,7 @@ function render() {
   else if (r.name === 'bets') renderBets();
   else if (r.name === 'check') renderCheck();
   else if (r.name === 'guide') renderGuide();
+  else if (r.name === 'builder') renderBuilder();
   else renderNews();
 }
 function onData() {
@@ -457,25 +489,36 @@ async function renderGamePick(r) {
   if (!g) return;
   const [tA, tH] = await Promise.all([loadTeam(g.league, g.away.id), loadTeam(g.league, g.home.id)]);
   if (route().id !== r.id || !$('#gpick')) return;
-  const e = estimate(g, sum, tA?.numbers, tH?.numbers);
+  const { e, list } = gamePicks(g, sum, tA?.numbers, tH?.numbers);
   const base = estimate(g, sum, tA?.numbers, tH?.numbers, { ignoreHurt: true });
   const changed = e.top && base.top && base.top.pick !== e.top.pick;
-  const hurtIds = new Set((e.hurt || []).map((x) => x.name));
-  const outNames = new Set(Object.values(sum?.injuries || {}).flat().filter((i) => /out|ir|doubt|susp/i.test(i.status)).map((i) => i.name));
-  const props = (S.daily?.props || []).filter((x) => x.game === gameKey(g));
-  if (!e.top && !props.length) { swapIn(box, '', 'none'); return; }
+  if (!list.length) { swapIn(box, '', 'none'); return; }
   const label = g.state === 'pre' ? 'Picks for this game' : g.state === 'in' ? 'Picks · updated live' : 'Pre-game picks';
+  const inSlip = new Set((S.slip || []).map((x) => x.id));
+  const slides = list.map((p, k) => `<div class="pslide">
+      <div class="pk"><span>${kindLabel[p.kind]}${k === 0 ? ' · top pick' : ''}</span><span class="grade g${p.bad ? 'F' : gradeOf(p.est, p.odds)}">${p.bad ? 'F' : gradeOf(p.est, p.odds)}</span></div>
+      <div class="p ${p.bad ? 'struck' : ''}">${esc(p.pick)}</div>
+      <div class="pm"><span class="tag t-pick">${p.est}% estimated</span>${p.odds ? `<span class="est">${esc(ml(p.odds))}</span>` : ''}</div>
+      ${k === 0 && changed ? `<div class="chg">🔄 Changed after an injury · was ${esc(base.top.pick)}</div>` : ''}
+      <p class="pw">${p.bad ? '⚠️ Hurt or ruled out, skip this one.' : esc(p.why || '')}</p>
+      ${p.bad || g.state === 'post' ? '' : `<button class="addleg ${inSlip.has(p.id) ? 'on' : ''}" data-addleg="${esc(p.id)}">${inSlip.has(p.id) ? '✓ In your parlay' : '+ Add to parlay'}</button>`}
+    </div>`).join('');
   const html = `<div class="sec pickcard">
-    <div class="hd"><h3>${label}</h3>${e.top ? `<span class="tag t-pick">${e.top.est}% estimated</span>` : ''}</div>
-    ${e.top ? `<div class="pop-in"><div class="p">${esc(e.top.pick)}</div>
-      ${changed ? `<div class="chg">🔄 Changed after an injury · was ${esc(base.top.pick)}</div>` : ''}
-      ${e.top.why ? `<p style="margin:6px 0 0">${esc(e.top.why)}</p>` : ''}
-      ${e.reasons.filter((x) => x.startsWith('🚑')).map((x) => `<p class="hurtnote">${esc(x)}</p>`).join('')}
-      ${e.reasons.some((x) => !x.startsWith('🚑')) ? `<details class="whyd"><summary>Why this pick</summary><ul class="why">${e.reasons.filter((x) => !x.startsWith('🚑')).map((x) => `<li>${esc(x)}</li>`).join('')}</ul></details>` : ''}
-      ${e.alt.length ? `<div class="odds">${e.alt.map((p) => `<span><b>Also</b>${esc(p.pick)} · ${p.est}%</span>`).join('')}</div>` : ''}</div>` : ''}
-    ${props.length ? `<div class="props">${props.map((x) => { const bad = hurtIds.has(x.player) || outNames.has(x.player); return `<div class="prop ${bad ? 'bad' : ''}"><div><b>${esc(x.player)}</b> ${esc(x.lean)} ${esc(x.line)} ${esc(String(x.stat).toLowerCase())}</div><div class="est">${bad ? '⚠️ Hurt or ruled out, skip this one' : `${x.est}% estimated · ${esc(x.why)}`}</div></div>`; }).join('')}</div>` : ''}
+    <div class="hd"><h3>${label}</h3>${list.length > 1 ? `<span class="est">swipe ‹ › ${list.length} picks</span>` : ''}</div>
+    <div class="pop-in"><div class="pslides">${slides}</div>
+    ${list.length > 1 ? `<div class="dots">${list.map((_, k) => `<i class="${k === 0 ? 'on' : ''}"></i>`).join('')}</div>` : ''}
+    ${e.reasons.filter((x) => x.startsWith('🚑')).map((x) => `<p class="hurtnote">${esc(x)}</p>`).join('')}
+    ${e.reasons.some((x) => !x.startsWith('🚑')) ? `<details class="whyd"><summary>Why these picks</summary><ul class="why">${e.reasons.filter((x) => !x.startsWith('🚑')).map((x) => `<li>${esc(x)}</li>`).join('')}</ul></details>` : ''}</div>
     <div class="est">Estimates from ESPN's win model, season scoring, the line and injuries. Not a sure thing.</div></div>`;
+  S.pickLists[g.id] = list;
+  const sc0 = $('.pslides', box); const x0 = sc0?.scrollLeft || 0;
   swapIn(box, html, `${e.top?.pick}|${(e.hurt || []).length}`);
+  const sc = $('.pslides', box);
+  if (sc && sc !== sc0) { sc.scrollLeft = x0; }
+  if (sc && !sc._l) {
+    sc._l = true;
+    sc.addEventListener('scroll', () => { const k = Math.round(sc.scrollLeft / sc.clientWidth); $$('.dots i', box).forEach((d, n) => d.classList.toggle('on', n === k)); }, { passive: true });
+  }
 }
 
 function pollGame(r) {
@@ -1243,6 +1286,101 @@ async function runCheck() {
   if (route().name === 'check') drawCheck();
 }
 
+// ---------- BET BUILDER ----------
+// Pick legs from today's picks, see the parlay's odds, chance to hit and an A-F grade.
+const slipLoad = () => { S.slip = store.get('slip', []).filter((x) => S.games.some((g) => g.id === x.gameId && g.state !== 'post') || !S.games.length); };
+const slipSave = () => store.set('slip', S.slip);
+function toggleLeg(id) {
+  const i = S.slip.findIndex((x) => x.id === id);
+  if (i >= 0) S.slip.splice(i, 1);
+  else {
+    const p = Object.values(S.pickLists).flat().find((x) => x.id === id);
+    if (!p) return;
+    // one side or total per game (the other side would cancel out)
+    S.slip = S.slip.filter((x) => !(x.gameId === p.gameId && x.kind === p.kind && p.kind !== 'prop'));
+    S.slip.push(p);
+  }
+  slipSave();
+}
+
+function parlayGrade(legs) {
+  if (!legs.length) return null;
+  const sameGame = legs.length !== new Set(legs.map((x) => x.gameId)).size;
+  let p = legs.reduce((t, x) => t * (x.est / 100), 1);
+  const dec = legs.reduce((t, x) => t * decOdds(x.odds), 1);
+  const ev = p * dec - 1;
+  const worst = legs.reduce((w, x) => ('ABCDF'.indexOf(gradeOf(x.est, x.odds)) > 'ABCDF'.indexOf(w) ? gradeOf(x.est, x.odds) : w), 'A');
+  let g = ev >= 0.08 ? 'A' : ev >= 0.02 ? 'B' : ev >= -0.05 ? 'C' : ev >= -0.15 ? 'D' : 'F';
+  const order = 'ABCDF';
+  if (legs.length >= 4 && order.indexOf(g) < 2) g = order[Math.min(4, order.indexOf(g) + 1)];
+  if (legs.length >= 6) g = order[Math.min(4, Math.max(order.indexOf(g), 3))];
+  if (order.indexOf(worst) > order.indexOf(g) + 1) g = order[order.indexOf(worst) - 1];
+  const notes = [];
+  if (legs.length === 1) notes.push('One pick is a straight bet, not a parlay. Add a second leg to build one.');
+  if (legs.length >= 4) notes.push(`${legs.length} legs is a lot. Every extra leg makes it much less likely to hit.`);
+  const weak = legs.filter((x) => 'DF'.includes(gradeOf(x.est, x.odds)));
+  if (weak.length) notes.push(`Weakest leg${weak.length > 1 ? 's' : ''}: ${weak.map((x) => x.pick).join(', ')}. Dropping ${weak.length > 1 ? 'them' : 'it'} would raise the grade.`);
+  if (sameGame) notes.push('Two legs from the same game often move together, so the real chance can differ from this estimate.');
+  if (!notes.length && legs.length >= 2) notes.push('Every leg grades well on its own. Keep the stake small anyway, parlays swing hard.');
+  return { grade: g, chance: p * 100, dec, am: amOdds(dec), ev, notes };
+}
+
+async function renderBuilder() {
+  const v = $('#view');
+  v.innerHTML = `<h1>Bet builder</h1><p class="sub">Tap picks to build a parlay. It grades every pick and the whole parlay from A to F.</p><div id="slipBox"></div><h2>Today's picks</h2><div class="seg" style="margin-bottom:10px">${['all', ...ALL_LEAGUES].map((k) => `<button data-bfilter="${k}" aria-pressed="${(S.bFilter || 'all') === k}">${k === 'all' ? 'All' : LG[k].label.split(' ')[0]}</button>`).join('')}</div><div id="bPicks"><div class="skel"></div><div class="skel"></div></div>`;
+  slipLoad();
+  drawSlip();
+  if (!S.games.length) await loadScoreboard();
+  const games = S.games.filter((g) => g.state === 'pre' && g.league !== 'nhl' && new Date(g.date) - Date.now() < 36 * 3600e3);
+  const queue = [...games];
+  const work = async () => {
+    while (queue.length) {
+      const g = queue.shift();
+      const [sum, tA, tH] = await Promise.all([loadSum(g.league, g.id, 10 * 60e3), loadTeam(g.league, g.away.id), loadTeam(g.league, g.home.id)]);
+      S.pickLists[g.id] = gamePicks(g, sum, tA?.numbers, tH?.numbers).list;
+    }
+  };
+  await Promise.all([work(), work(), work(), work()]);
+  if (route().name !== 'builder') return;
+  drawBuilderPicks();
+}
+
+function drawBuilderPicks() {
+  const el = $('#bPicks');
+  if (!el) return;
+  const f = S.bFilter || 'all';
+  const all = Object.values(S.pickLists).flat().filter((p) => !p.bad && (f === 'all' || p.league === f) && S.games.some((g) => g.id === p.gameId && g.state === 'pre'));
+  all.sort((a, b) => (b.est - breakEven(b.odds)) - (a.est - breakEven(a.odds)));
+  const inSlip = new Set(S.slip.map((x) => x.id));
+  el.innerHTML = all.length ? `<div class="blist">${all.map((p) => { const gr = gradeOf(p.est, p.odds); return `<button class="bpick ${inSlip.has(p.id) ? 'on' : ''}" data-addleg="${esc(p.id)}"><span class="grade g${gr}">${gr}</span><span class="bp"><b>${esc(p.pick)}</b><small>${esc(LG[p.league].label)} · ${esc(p.game)} · ${esc(kindLabel[p.kind])} · ${p.est}% · ${esc(ml(p.odds))}</small></span><span class="plus">${inSlip.has(p.id) ? '✓' : '+'}</span></button>`; }).join('')}</div>` : '<div class="empty">No picks for upcoming games right now. Check back closer to game time.</div>';
+}
+
+function drawSlip() {
+  const el = $('#slipBox');
+  if (!el) return;
+  const legs = S.slip;
+  const pg = parlayGrade(legs);
+  const unit = (() => { const roll = Number(store.get('bankroll', 0)) || 0; const r = RISK[store.get('risk', 'standard')] || RISK.standard; return roll ? (roll * r.pct) / 100 : 0; })();
+  const stake = Number(store.get('slipStake', 0)) || (unit ? Math.max(1, Math.round(unit * (legs.length > 1 ? 0.5 : 1) * 100) / 100) : 5);
+  if (!legs.length) { el.innerHTML = `<div class="slip empty-slip"><b>Your parlay is empty</b><span>Tap + on a pick below, or let us start one.</span><button class="pri" data-autobuild>⚡ Build one for me</button></div>`; return; }
+  el.innerHTML = `<div class="slip">
+    <div class="slipgrade"><span class="grade big g${pg.grade}">${pg.grade}</span><div><b>${legs.length === 1 ? 'Straight bet' : `${legs.length}-leg parlay`} · ${esc(ml(pg.am))}</b><small>About ${pg.chance < 1 ? '<1' : Math.round(pg.chance)}% chance to hit (estimate)</small></div></div>
+    <div class="legs">${legs.map((x) => { const gr = gradeOf(x.est, x.odds); return `<div class="leg"><span class="grade g${gr}">${gr}</span><div><b>${esc(x.pick)}</b><small>${esc(x.game)} · ${x.est}% · ${esc(ml(x.odds))}</small></div><button class="ghost x" data-addleg="${esc(x.id)}" aria-label="Remove">✕</button></div>`; }).join('')}</div>
+    <ul class="tips">${pg.notes.map((n) => `<li>${esc(n)}</li>`).join('')}</ul>
+    <form id="slipForm" class="slipbet"><label>Bet ($)<input name="stake" inputmode="decimal" value="${stake}"></label><div class="pays">Pays <b>${usd(stake * pg.dec)}</b>${unit ? `<small>${(stake / unit).toFixed(2).replace(/\.?0+$/, '')} units</small>` : ''}</div><button class="pri" type="submit">Save to My bets</button></form>
+    <div class="ckbtns"><button data-autobuild>⚡ Rebuild for me</button><button data-clearslip>Clear</button></div>
+    <p class="est">Grades and chances are estimates from ESPN numbers, not sure things.</p></div>`;
+}
+
+function autoBuild() {
+  const all = Object.values(S.pickLists).flat().filter((p) => !p.bad && S.games.some((g) => g.id === p.gameId && g.state === 'pre') && 'AB'.includes(gradeOf(p.est, p.odds)));
+  all.sort((a, b) => (b.est - breakEven(b.odds)) - (a.est - breakEven(a.odds)));
+  const used = new Set(); const legs = [];
+  for (const p of all) { if (used.has(p.gameId)) continue; used.add(p.gameId); legs.push(p); if (legs.length === 3) break; }
+  if (legs.length < 2) { const more = Object.values(S.pickLists).flat().filter((p) => !p.bad && !used.has(p.gameId) && S.games.some((g) => g.id === p.gameId && g.state === 'pre')).sort((a, b) => b.est - a.est); for (const p of more) { if (used.has(p.gameId)) continue; used.add(p.gameId); legs.push(p); if (legs.length === 2) break; } }
+  S.slip = legs; slipSave();
+}
+
 // ---------- MONEY GUIDE ----------
 // Bankroll + unit calculator. Everything stays on this phone.
 const RISK = { careful: { pct: 1, label: 'Careful', note: '1% a unit. Best when you are starting out or on a losing run.' }, standard: { pct: 2, label: 'Standard', note: '2% a unit. What most steady bettors use.' }, bold: { pct: 3, label: 'Bold', note: '3% a unit. Bigger swings. Never go above 5%.' } };
@@ -1348,6 +1486,16 @@ document.addEventListener('click', async (e) => {
   if (t.dataset.pseason) { $('#sheet')._season(t.dataset.pseason); return; }
   if (t.dataset.stat) { $('#sheet')._redraw((s) => { s.stat = t.dataset.stat; s.line = null; }); return; }
   if (t.dataset.line) { $('#sheet')._redraw((s) => { s.line = Math.max(0.5, s.line + Number(t.dataset.line)); }); return; }
+  if (t.dataset.addleg) {
+    if (!S.slip.length) S.slip = store.get('slip', []);
+    toggleLeg(t.dataset.addleg);
+    if (route().name === 'builder') { drawSlip(); drawBuilderPicks(); }
+    else { const on = S.slip.some((x) => x.id === t.dataset.addleg); t.classList.toggle('on', on); t.textContent = on ? '✓ In your parlay' : '+ Add to parlay'; $('#gpick')._h = null; }
+    return;
+  }
+  if (t.hasAttribute('data-autobuild')) { autoBuild(); drawSlip(); drawBuilderPicks(); return; }
+  if (t.hasAttribute('data-clearslip')) { S.slip = []; slipSave(); drawSlip(); drawBuilderPicks(); return; }
+  if (t.dataset.bfilter) { S.bFilter = t.dataset.bfilter; $$('[data-bfilter]').forEach((b) => b.setAttribute('aria-pressed', b.dataset.bfilter === S.bFilter)); drawBuilderPicks(); return; }
   if (t.dataset.risk) { store.set('risk', t.dataset.risk); drawGuide(); return; }
   if (t.dataset.pf) { S.playFilter = t.dataset.pf; renderGameBody(route()); return; }
   if (t.dataset.period) { S.period = t.dataset.period; drawBets(); return; }
@@ -1357,6 +1505,7 @@ document.addEventListener('click', async (e) => {
   if (t.hasAttribute('data-migrate')) { try { await Bets.put(Bets.local()); store.set('bets', []); } catch (err) { alert(err.message); } drawBets(); }
 });
 document.addEventListener('change', async (e) => {
+  if (e.target.closest('#slipForm')) { store.set('slipStake', Number(e.target.value) || 0); drawSlip(); return; }
   if (e.target.id === 'ckFile') {
     const f = e.target.files?.[0];
     if (!f) return;
@@ -1376,6 +1525,19 @@ document.addEventListener('change', async (e) => {
   drawBets();
 });
 document.addEventListener('submit', async (e) => {
+  if (e.target.id === 'slipForm') {
+    e.preventDefault();
+    const stake = Number(new FormData(e.target).get('stake')) || 0;
+    const pg = parlayGrade(S.slip);
+    if (!stake || !pg) return;
+    const sports = [...new Set(S.slip.map((x) => LG[x.league].label))];
+    const bet = { id: `b${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`, date: today(), app: 'Other', sport: sports.length === 1 ? sports[0] : 'Other', desc: S.slip.length === 1 ? S.slip[0].pick : `${S.slip.length}-leg parlay (grade ${pg.grade}): ${S.slip.map((x) => x.pick).join('; ')}`, odds: pg.am, stake, status: 'pending', payout: Math.round(stake * pg.dec * 100) / 100 };
+    await Bets.load();
+    try { await Bets.put([bet]); } catch (err) { alert(err.message); return; }
+    S.slip = []; slipSave();
+    location.hash = '#/bets';
+    return;
+  }
   if (e.target.id === 'guideForm') {
     e.preventDefault();
     const v = Number(String(new FormData(e.target).get('roll')).replace(/[$,]/g, '')) || 0;
