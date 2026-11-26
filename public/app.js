@@ -270,10 +270,7 @@ function onData() {
 // ---------- GAMES ----------
 function renderGames() {
   const v = $('#view');
-  const today = new Date().toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' });
   v.innerHTML = `
-    <div class="hero-brand"><img src="/icon.svg" alt=""><div><h1 class="name">GIGI<b>PICKS</b></h1><div class="tagline">Live picks · every play</div></div></div>
-    <p class="sub">${esc(today)}. Scores, clocks and plays update on their own.</p>
     ${viewSwitch('today')}
     <div id="tickerWrap"></div>
     <div id="picksWrap"></div>
