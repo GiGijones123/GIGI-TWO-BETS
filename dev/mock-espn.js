@@ -117,7 +117,7 @@ function gamelog(id) {
     events[eid] = { gameDate: iso(now - (i + 1) * 7 * 864e5), opponent: { abbreviation: o }, atVs: i % 2 ? '@' : 'vs', gameResult: i % 3 ? 'W' : 'L', score: '27-20' };
     return { eventId: eid, stats: ['20', '30', String(vals[i]), '2', '0', '2', '5', String(5 + (i % 4)), String(60 + i * 7)] };
   });
-  return { names, labels: names.map((n) => n.slice(0, 4).toUpperCase()), events, seasonTypes: [{ displayName: '2026 Regular Season', categories: [{ events: evs }] }] };
+  return { filters: [{ name: 'season', options: [{ value: '2026', displayValue: '2026' }, { value: '2025', displayValue: '2025' }, { value: '2024', displayValue: '2024' }] }], names, labels: names.map((n) => n.slice(0, 4).toUpperCase()), events, seasonTypes: [{ displayName: '2026 Regular Season', categories: [{ events: evs }] }] };
 }
 function news() {
   return { articles: [1, 2, 3].map((i) => ({ headline: `Mock headline number ${i}`, description: 'Something happened in the league today and it matters for your bets.', published: iso(now - i * 3600e3), images: [{ url: '' }], links: { web: { href: 'https://www.espn.com' } } })) };
@@ -127,8 +127,13 @@ export function mockFetch(url) {
   const u = new URL(url);
   const p = u.pathname;
   let body = null;
-  if (p.endsWith('/football/nfl/scoreboard')) body = sbNFL();
-  else if (p.endsWith('/basketball/nba/scoreboard')) body = u.searchParams.get('dates')?.endsWith('27') ? sbNBA() : { events: [] };
+  if (p.endsWith('/football/nfl/scoreboard')) {
+    body = sbNFL();
+    body.season = { type: 2, year: 2026 }; body.week = { number: 12 };
+    body.leagues = [{ calendar: [{ label: 'Preseason', value: '1', entries: [] }, { label: 'Regular Season', value: '2', entries: Array.from({ length: 18 }, (_, i) => ({ label: `Week ${i + 1}`, value: String(i + 1), startDate: '', endDate: '' })) }, { label: 'Postseason', value: '3', entries: [{ label: 'Wild Card', value: '1' }, { label: 'Pro Bowl', value: '4' }, { label: 'Super Bowl', value: '5' }] }] }];
+    if (u.searchParams.get('week')) body.events = body.events.map((e) => ({ ...e, competitions: [{ ...e.competitions[0], status: { type: { state: 'post', completed: true, shortDetail: 'Final' }, period: 4 } }] }));
+  }
+  else if (p.endsWith('/basketball/nba/scoreboard')) { body = u.searchParams.get('dates')?.endsWith('27') ? sbNBA() : { events: sbNBA().events.map((e) => ({ ...e, competitions: [{ ...e.competitions[0], status: { type: { state: 'post', shortDetail: 'Final' } } }] })) }; body.leagues = [{ calendar: ['2025-10-21T07:00Z', '2025-10-22T07:00Z', '2026-11-25T07:00Z', '2026-11-26T07:00Z', '2026-11-27T07:00Z'] }]; }
   else if (p.endsWith('/scoreboard')) body = { events: [] };
   else if (p.endsWith('/summary')) body = summary(u.searchParams.get('event'));
   else if (/teams\/\d+\/roster$/.test(p)) body = roster(p.match(/teams\/(\d+)/)[1]);

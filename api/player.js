@@ -68,7 +68,7 @@ function gamelog(j) {
   return { names, labels, displayNames: j.displayNames || [], games };
 }
 
-function season(ov) {
+function seasonStats(ov) {
   const s = ov?.statistics;
   if (!s) return null;
   const split = (s.splits || []).find((x) => /regular|season/i.test(x.displayName)) || s.splits?.[0];
@@ -80,8 +80,9 @@ export default handler(async (req) => {
   const [key, L] = league(req);
   const id = String(req.query?.id || '').replace(/\D/g, '');
   if (!id) throw Object.assign(new Error('Missing player id'), { status: 400 });
+  const season = String(req.query?.season || '').replace(/\D/g, '').slice(0, 4);
   const base = `${urls.WEB}/${L.path}/athletes/${id}`;
-  const [a, ov, gl] = await Promise.all([tryJSON(base), tryJSON(`${base}/overview`), tryJSON(`${base}/gamelog`)]);
+  const [a, ov, gl] = await Promise.all([tryJSON(base), tryJSON(`${base}/overview`), tryJSON(`${base}/gamelog${season ? `?season=${season}` : ''}`)]);
   if (!a && !ov && !gl) throw Object.assign(new Error('ESPN has no data for this player right now'), { status: 502 });
-  return { league: key, bio: bio(a, L, id), season: season(ov), log: gamelog(gl) };
+  return { league: key, bio: bio(a, L, id), season: seasonStats(ov), log: gamelog(gl), seasons: (gl?.filters || []).find((f) => f.name === 'season')?.options?.map((o) => ({ value: String(o.value), label: o.displayValue })) || [] };
 }, { sMaxAge: 600, swr: 3600 });

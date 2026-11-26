@@ -244,6 +244,7 @@ function route() {
   if (a === 'game' && b && c) return { name: 'game', league: b, id: c };
   if (a === 'bets') return { name: 'bets' };
   if (a === 'news') return { name: 'news' };
+  if (a === 'season') return { name: 'season' };
   return { name: 'games' };
 }
 function setTab(name) {
@@ -253,9 +254,10 @@ let gameTimer = null;
 function render() {
   const r = route();
   clearTimeout(gameTimer);
-  setTab(r.name === 'game' ? 'games' : r.name);
+  setTab(r.name === 'game' || r.name === 'season' ? 'games' : r.name);
   if (r.name === 'games') renderGames();
   else if (r.name === 'game') renderGame(r);
+  else if (r.name === 'season') renderSeason();
   else if (r.name === 'bets') renderBets();
   else renderNews();
 }
@@ -272,6 +274,7 @@ function renderGames() {
   v.innerHTML = `
     <h1>Game day</h1>
     <p class="sub">${esc(today)}. Scores, clocks and plays update on their own.</p>
+    ${viewSwitch('today')}
     <div id="tickerWrap"></div>
     <div id="picksWrap"></div>
     <div class="chips" id="chips" role="group" aria-label="Sport">
@@ -626,6 +629,73 @@ function renderPlays(body, g, sum) {
 }
 const playRow = (p) => `<div class="play ${p.injury ? 'inj' : p.scoring ? 'score' : ''}"><div class="t"><b>${esc(p.clock)}</b>${esc(p.periodLabel || (p.period ? 'Q' + p.period : ''))}</div><div>${p.type || p.team ? `<div class="ty">${esc(p.team)}${p.team && p.type ? ' · ' : ''}${esc(p.type)}</div>` : ''}${esc(p.text)}${p.scoring && p.away !== null ? ` <b>(${p.away}-${p.home})</b>` : ''}</div></div>`;
 
+// ---------- PAST GAMES / SEASONS ----------
+const viewSwitch = (on) => `<div class="seg" style="margin:4px 0 10px"><button data-view="today" aria-pressed="${on === 'today'}">Today &amp; upcoming</button><button data-view="season" aria-pressed="${on === 'season'}">Past games</button></div>`;
+// The current season is worked out from today's date, so it rolls over on its own each year.
+function currentSeason(lg, d = new Date()) {
+  const y = d.getFullYear(); const m = d.getMonth() + 1;
+  if (lg === 'nfl' || lg === 'cfb') return m >= 8 ? y : y - 1;
+  return m >= 10 ? y + 1 : y;
+}
+const seasonLabel = (lg, s) => (lg === 'nfl' || lg === 'cfb' ? `${s} season` : `${s - 1}-${String(s).slice(2)}`);
+const fmtDateKey = (k) => new Date(`${k.slice(0, 4)}-${k.slice(4, 6)}-${k.slice(6, 8)}T12:00:00`).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+
+S.sLeague = store.get('sLeague', 'nfl');
+S.sSeason = null;
+S.sSel = null;
+S.sData = null;
+
+async function renderSeason() {
+  const v = $('#view');
+  const lg = S.sLeague;
+  const cur = currentSeason(lg);
+  const season = S.sSeason || cur;
+  v.innerHTML = `
+    <h1>Past games</h1>
+    <p class="sub">Every result, any season. This season starts over on its own each year.</p>
+    ${viewSwitch('season')}
+    <div class="chips" role="group" aria-label="Sport">${ALL_LEAGUES.map((k) => `<button data-sleague="${k}" aria-pressed="${lg === k}">${LG[k].label}</button>`).join('')}</div>
+    <label style="margin:6px 0 10px">Season<select id="seasonPick">${[0, 1, 2, 3, 4, 5].map((i) => cur - i).map((s) => `<option value="${s}" ${s === season ? 'selected' : ''}>${esc(seasonLabel(lg, s))}${s === cur ? ' (this season)' : ''}</option>`).join('')}</select></label>
+    <div id="seasonNav"></div>
+    <div id="seasonList"><div class="games"><div class="skel"></div><div class="skel"></div></div></div>`;
+  window.scrollTo(0, 0);
+  const qs = new URLSearchParams({ league: lg, season: String(season) });
+  if (S.sSel?.week) { qs.set('week', S.sSel.week); qs.set('type', S.sSel.type); }
+  if (S.sSel?.date) qs.set('date', S.sSel.date);
+  let d;
+  try { d = await api(`/api/season?${qs}`); } catch (e) {
+    if (route().name === 'season') $('#seasonList').innerHTML = `<div class="empty">Could not load that season right now. ${esc(e.message)}</div>`;
+    return;
+  }
+  if (route().name !== 'season' || S.sLeague !== lg) return;
+  S.sData = d;
+  S.sSel = d.selected;
+  drawSeasonBody();
+}
+
+function drawSeasonBody() {
+  const d = S.sData;
+  if (!d || !$('#seasonNav')) return;
+  if (d.calendar.kind === 'weeks') {
+    $('#seasonNav').innerHTML = `<div class="chips" id="weekChips">${d.calendar.items.map((w) => `<button data-week="${esc(w.type)}:${esc(w.week)}" aria-pressed="${w.type === d.selected.type && w.week === d.selected.week}">${esc(w.label)}</button>`).join('')}</div>`;
+    const on = $('#weekChips [aria-pressed=true]');
+    if (on) on.scrollIntoView({ inline: 'center', block: 'nearest' });
+  } else {
+    const days = d.calendar.items;
+    const i = days.indexOf(d.selected.date);
+    const prev = i > 0 ? days[i - 1] : null;
+    const next = i >= 0 && i < days.length - 1 ? days[i + 1] : null;
+    $('#seasonNav').innerHTML = `<div class="lineadj"><button ${prev ? `data-day="${prev}"` : 'disabled'} aria-label="Previous game day">‹</button><div style="text-align:center"><div class="est">Game day</div><b style="font-size:22px">${esc(fmtDateKey(d.selected.date))}</b></div><button ${next ? `data-day="${next}"` : 'disabled'} aria-label="Next game day">›</button></div>`;
+  }
+  const games = d.games;
+  if (!games.length) { $('#seasonList').innerHTML = '<div class="empty">No games on this date.</div>'; return; }
+  const done = games.filter((g) => g.state === 'post');
+  const byDay = {};
+  for (const g of games) (byDay[new Date(g.date).toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric' })] ||= []).push(g);
+  $('#seasonList').innerHTML = `<p class="est" style="margin:10px 0 0">${done.length} of ${games.length} games final · ${esc(seasonLabel(d.league, d.season))}</p>` +
+    Object.entries(byDay).map(([day, list]) => `<h2>${esc(day)} <span class="count">${list.length}</span></h2><div class="games">${list.map(gameCard).join('')}</div>`).join('');
+}
+
 // ---------- PLAYER CARD ----------
 const STAT_LABEL = {
   passingYards: 'Pass yds', passingTouchdowns: 'Pass TD', completions: 'Completions', passingAttempts: 'Pass att', interceptions: 'INT',
@@ -654,12 +724,27 @@ async function openPlayer(league, id) {
     try { p = await api(`/api/player?league=${league}&id=${id}`); S.players[`${league}:${id}`] = p; }
     catch { dlg.querySelector('.skel').outerHTML = '<div class="empty">Could not load this player right now.</div>'; return; }
   }
-  const stats = propStats(league, p.bio.pos).filter((k) => p.log.games.some((x) => x.stats[k] !== null && x.stats[k] !== undefined));
+  const statsOf = (pp) => propStats(league, pp.bio.pos).filter((k) => pp.log.games.some((x) => x.stats[k] !== null && x.stats[k] !== undefined));
   const curated = S.daily?.props?.find((x) => x.player === p.bio.name);
   const cStat = curated ? CURATED_STAT[curated.stat] : null;
-  const state = { stat: cStat && stats.includes(cStat) ? cStat : stats[0], line: null };
-  const draw = () => drawPlayer(dlg, league, p, stats, state, curated);
+  const ctx = { p, stats: statsOf(p) };
+  const cur = currentSeason(league);
+  const seasons = p.seasons?.length ? p.seasons.slice(0, 5) : [0, 1, 2].map((i) => ({ value: String(cur - i), label: seasonLabel(league, cur - i) }));
+  const state = { stat: cStat && ctx.stats.includes(cStat) ? cStat : ctx.stats[0], line: null, season: seasons[0]?.value, seasons, latest: seasons[0]?.value };
+  const draw = () => drawPlayer(dlg, league, ctx.p, ctx.stats, state, state.season === state.latest ? curated : null);
   dlg._redraw = (fn) => { fn(state); draw(); };
+  dlg._season = async (season) => {
+    state.season = season; state.line = null;
+    const k = `${league}:${id}:${season}`;
+    try {
+      const np = S.players[k] || (await api(`/api/player?league=${league}&id=${id}&season=${season}`));
+      S.players[k] = np;
+      ctx.p = { ...ctx.p, log: np.log };
+      ctx.stats = statsOf(ctx.p);
+      if (!ctx.stats.includes(state.stat)) state.stat = ctx.stats[0];
+    } catch { ctx.p = { ...ctx.p, log: { games: [] } }; ctx.stats = []; }
+    draw();
+  };
   draw();
 }
 
@@ -684,7 +769,7 @@ function drawPlayer(dlg, league, p, stats, state, curated) {
   const g = sum?.game;
   const todayVal = sum?.box?.[b.id]?.stats?.[state.stat];
   let today = '';
-  if (g && todayVal !== undefined && todayVal !== null) {
+  if (state.season !== state.latest) { /* past season: no live check */ } else if (g && todayVal !== undefined && todayVal !== null) {
     const done = g.state === 'post';
     const hit = todayVal > line;
     today = `<div class="today ${done ? (hit ? 'hit' : 'miss') : ''}"><div><div style="font-size:12px;font-weight:800;text-transform:uppercase">${done ? 'Today, final' : `Today, live · ${esc(periodName(g))} ${esc(g.clock)}`}</div>${done ? (hit ? 'Hit the line ✅' : 'Missed the line ❌') : hit ? 'Already over the line ✅' : `Needs ${(line - todayVal + 0.5).toFixed(1).replace(/\.0$/, '')} more`}</div><b>${todayVal}</b></div>`;
@@ -695,7 +780,7 @@ function drawPlayer(dlg, league, p, stats, state, curated) {
   // reasons
   const why = [];
   if (isCurated && curated.why) why.push(curated.why);
-  const why2 = S.daily?.players?.[b.name]?.why;
+  const why2 = state.season === state.latest ? S.daily?.players?.[b.name]?.why : null;
   if (why2 && !why.includes(why2)) why.push(why2);
   if (vals.length >= 3) {
     const l3 = avg(vals.slice(0, 3));
@@ -729,8 +814,9 @@ function drawPlayer(dlg, league, p, stats, state, curated) {
       ${[['Age', b.age], ['Height', b.height], ['Weight', b.weight], ['College', b.college], ['Experience', b.exp], ['Hometown', b.birthPlace], ['Draft', b.draft]].filter((x) => x[1]).map((x) => `<div>${esc(x[0])}<b>${esc(x[1])}</b></div>`).join('')}
     </div>
     ${p.season ? `<div><div class="est" style="margin-bottom:6px">${esc(p.season.label)}</div><div class="tiles">${p.season.items.slice(0, 8).map(([k, v]) => `<div>${esc(k)}<b>${esc(v)}</b></div>`).join('')}</div></div>` : ''}
+    ${state.seasons?.length > 1 ? `<div><div class="est" style="margin-bottom:4px">Season</div><div class="chips">${state.seasons.map((x) => `<button data-pseason="${esc(x.value)}" aria-pressed="${x.value === state.season}">${esc(x.label)}</button>`).join('')}</div></div>` : ''}
     ${stats.length ? `
-    <h3 style="margin-top:6px">Prop tracker</h3>
+    <h3 style="margin-top:6px">Prop tracker${state.season !== state.latest ? ` <span class="tag">${esc(state.seasons.find((x) => x.value === state.season)?.label || '')}</span>` : ''}</h3>
     <div class="chips">${stats.map((k) => `<button data-stat="${k}" aria-pressed="${k === state.stat}">${esc(STAT_LABEL[k] || k)}</button>`).join('')}</div>
     <div class="lineadj"><button data-line="-${step}" aria-label="Lower line">−</button><div style="text-align:center"><div class="est">${isCurated ? `${esc(curated.book)} line` : 'Line (estimated, tap to adjust)'}</div><b>${line}</b></div><button data-line="${step}" aria-label="Raise line">+</button></div>
     ${today}
@@ -743,7 +829,7 @@ function drawPlayer(dlg, league, p, stats, state, curated) {
       <div class="blabs">${shown.map((x) => `<span>${esc(x.atVs === '@' ? '@' : '')}${esc(x.opp)}</span>`).join('')}</div>
       <div class="est" style="margin-top:4px">Green = went over the line, red = stayed under. Oldest on the left.</div></div>` : '<div class="est">No game log yet this season.</div>'}
     ${isCurated ? `<div class="note">Lean: <b>${esc(curated.lean)} ${curated.line}</b> · ${curated.est}% estimated${curated.over ? ` · Over ${ml(curated.over)} / Under ${ml(curated.under)}` : ''}</div>` : ''}
-    ` : ''}
+    ` : `<div class="empty">No games logged for this season.</div>`}
     ${why.length ? `<div><h3>Why the numbers look like this</h3><ul class="why" style="margin-top:6px">${why.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div>` : ''}
     ${p.log.games.length ? `<details><summary style="cursor:pointer;font-weight:800">Game log</summary><div class="scroll" style="margin-top:8px"><table><thead><tr><th>Date</th><th>Opp</th><th>Result</th>${stats.map((k) => `<th class="n">${esc(STAT_LABEL[k] || k)}</th>`).join('')}</tr></thead><tbody>${p.log.games.slice(0, 17).map((x) => `<tr><td>${esc(new Date(x.date).toLocaleDateString([], { month: 'numeric', day: 'numeric' }))}</td><td>${esc(x.atVs)} ${esc(x.opp)}</td><td>${esc(x.result)} ${esc(x.score)}</td>${stats.map((k) => `<td class="n">${x.stats[k] ?? ''}</td>`).join('')}</tr>`).join('')}</tbody></table></div></details>` : ''}
     <div class="est">Hit rates use past games against the line shown. Estimates only.</div>
@@ -913,6 +999,11 @@ document.addEventListener('click', async (e) => {
   if (t.dataset.unit) { S.unit = t.dataset.unit; renderGameBody(route()); return; }
   if (t.dataset.player) { const [lg, id] = t.dataset.player.split(':'); if (id) openPlayer(lg, id); return; }
   if (t.hasAttribute('data-close')) { $('#sheet').close(); return; }
+  if (t.dataset.view) { location.hash = t.dataset.view === 'season' ? '#/season' : '#/'; return; }
+  if (t.dataset.sleague) { S.sLeague = t.dataset.sleague; store.set('sLeague', S.sLeague); S.sSeason = null; S.sSel = null; renderSeason(); return; }
+  if (t.dataset.week) { const [type, week] = t.dataset.week.split(':'); S.sSel = { type, week }; renderSeason(); return; }
+  if (t.dataset.day) { S.sSel = { date: t.dataset.day }; renderSeason(); return; }
+  if (t.dataset.pseason) { $('#sheet')._season(t.dataset.pseason); return; }
   if (t.dataset.stat) { $('#sheet')._redraw((s) => { s.stat = t.dataset.stat; s.line = null; }); return; }
   if (t.dataset.line) { $('#sheet')._redraw((s) => { s.line = Math.max(0.5, s.line + Number(t.dataset.line)); }); return; }
   if (t.dataset.period) { S.period = t.dataset.period; drawBets(); return; }
@@ -920,6 +1011,7 @@ document.addEventListener('click', async (e) => {
   if (t.hasAttribute('data-migrate')) { try { await Bets.put(Bets.local()); store.set('bets', []); } catch (err) { alert(err.message); } drawBets(); }
 });
 document.addEventListener('change', async (e) => {
+  if (e.target.id === 'seasonPick') { S.sSeason = Number(e.target.value); S.sSel = null; renderSeason(); return; }
   const s = e.target.closest('[data-status]');
   if (!s) return;
   const b = S.bets.find((x) => x.id === s.dataset.status);
