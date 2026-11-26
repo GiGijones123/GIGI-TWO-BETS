@@ -292,6 +292,37 @@ function setHTML(el, html) {
   if (x && el.firstElementChild) el.firstElementChild.scrollLeft = x;
 }
 
+// Swap a box's content with a short slide-in, only when the thing it shows really changed.
+function swapIn(box, html, id) {
+  if (!box || box._h === html) return;
+  const fresh = box._id !== undefined && box._id !== id;
+  box.innerHTML = html;
+  box._h = html; box._id = id;
+  if (fresh) { box.classList.remove('popped'); void box.offsetWidth; box.classList.add('popped'); }
+}
+
+// Keep a list of plays in sync without redrawing it: old rows stay put (photos stay loaded),
+// new plays slide in at the top.
+function syncFeed(feed, plays) {
+  if (!feed) return;
+  const first = !feed._ready;
+  const have = new Map([...feed.children].map((n) => [n.dataset.pid, n]));
+  const nodes = plays.map((p) => {
+    const html = playRow(p);
+    const pid = String(p.id);
+    let n = have.get(pid);
+    if (n && n._h === html) return n;
+    const wrap = document.createElement('div');
+    wrap.innerHTML = html;
+    const fresh = wrap.firstElementChild;
+    fresh.dataset.pid = pid; fresh._h = html;
+    if (!first && !n) fresh.classList.add('slide-in');
+    return fresh;
+  });
+  feed.replaceChildren(...nodes);
+  feed._ready = true;
+}
+
 function renderGamesBody() {
   if (!$('#lists')) return;
   const shown = S.games.filter((g) => S.filter === 'all' || g.league === S.filter);
@@ -432,12 +463,18 @@ function renderGameLive(r) {
   }
   const lastPlay = sum?.plays?.[0];
   const inj = sum?.liveInjuries?.[0];
-  const box = live || post ? `<div class="livebox">
-      <div class="lb ${S.flash.has(g.id) ? 'flash' : ''}"><div class="k">${live ? 'Latest play' : 'Final play'} <span>${lastPlay ? esc(`${lastPlay.periodLabel || ''} ${lastPlay.clock}`) : ''}</span></div>${lastPlay ? actorsHTML(lastPlay, { compact: true }) : esc(g.lastPlay || 'Waiting for the first play')}</div>
-      <div class="lb inj ${S.flash.has('inj' + g.id) ? 'flash' : ''}"><div class="k">Latest injury <span>${inj ? esc(`${inj.periodLabel || ''} ${inj.clock}`) : ''}</span></div>${inj ? (inj.injured?.length ? injuredHTML(inj) : esc(inj.text)) : 'No in-game injuries reported so far.'}</div>
-    </div>` : '';
-  el.innerHTML = `<div class="hero" style="--ca:${esc(g.away.color)};--ch:${esc(g.home.color)}">
-    <div class="vs">${side(g.away)}<div class="mid">${mid}</div>${side(g.home)}</div>${wp}${box}</div>`;
+  const top = `<div class="vs">${side(g.away)}<div class="mid">${mid}</div>${side(g.home)}</div>${wp}`;
+  const playHTML = `<div class="k">${live ? 'Latest play' : 'Final play'} <span>${lastPlay ? esc(`${lastPlay.periodLabel || ''} ${lastPlay.clock}`) : ''}</span></div><div class="pop-in">${lastPlay ? actorsHTML(lastPlay, { compact: true }) : esc(g.lastPlay || 'Waiting for the first play')}</div>`;
+  const injHTML = `<div class="k">Latest injury <span>${inj ? esc(`${inj.periodLabel || ''} ${inj.clock}`) : ''}</span></div><div class="pop-in">${inj ? (inj.injured?.length ? injuredHTML(inj) : esc(inj.text)) : 'No in-game injuries reported so far.'}</div>`;
+  // Build the frame once per game, then only swap the parts that changed so nothing flickers.
+  const key = `${g.id}:${live || post ? 1 : 0}`;
+  if (el._key !== key) {
+    el.innerHTML = `<div class="hero" style="--ca:${esc(g.away.color)};--ch:${esc(g.home.color)}"><div id="hTop"></div>${live || post ? '<div class="livebox"><div class="lb" id="hPlay"></div><div class="lb inj" id="hInj"></div></div>' : ''}</div>`;
+    el._key = key;
+  }
+  setHTML($('#hTop', el), top);
+  swapIn($('#hPlay', el), playHTML, lastPlay?.id || g.lastPlay);
+  swapIn($('#hInj', el), injHTML, inj?.id);
   S.flash.delete(g.id); S.flash.delete('inj' + g.id);
 }
 
@@ -620,12 +657,21 @@ function renderLineups(body, g, sum, tA, tH) {
 
 function renderPlays(body, g, sum) {
   const plays = sum?.plays || [];
-  if (!plays.length) { body.innerHTML = `<div class="empty">${g.state === 'pre' ? `Plays show up here once the game starts. Kickoff ${esc(fmtDay(g.date))} at ${esc(fmtTime(g.date))}.` : 'No plays yet.'}</div>`; return; }
-  const scoring = plays.filter((p) => p.scoring);
-  body.innerHTML = `
-    ${sum.liveInjuries?.length ? `<div class="sec"><h3>🚑 Injuries during the game</h3><div class="feed">${sum.liveInjuries.map((p) => playRow(p)).join('')}</div></div>` : ''}
-    ${scoring.length ? `<div class="sec"><h3>Scoring plays</h3><div class="feed">${scoring.slice(0, 12).map((p) => playRow(p)).join('')}</div></div>` : ''}
-    <div class="sec"><div class="hd"><h3>Every play</h3><span class="est">newest first · updates every few seconds</span></div><div class="feed">${plays.map((p) => playRow(p)).join('')}</div></div>`;
+  if (!plays.length) { body._plays = null; body.innerHTML = `<div class="empty">${g.state === 'pre' ? `Plays show up here once the game starts. Kickoff ${esc(fmtDay(g.date))} at ${esc(fmtTime(g.date))}.` : 'No plays yet.'}</div>`; return; }
+  if (body._plays !== g.id || !$('#fAll', body)) {
+    body.innerHTML = `
+      <div class="sec" id="sInj" hidden><h3>🚑 Injuries during the game</h3><div class="feed" id="fInj"></div></div>
+      <div class="sec" id="sScore" hidden><h3>Scoring plays</h3><div class="feed" id="fScore"></div></div>
+      <div class="sec"><div class="hd"><h3>Every play</h3><span class="est">newest first · new plays slide in live</span></div><div class="feed" id="fAll"></div></div>`;
+    body._plays = g.id;
+  }
+  const inj = sum.liveInjuries || [];
+  const scoring = plays.filter((p) => p.scoring).slice(0, 12);
+  $('#sInj', body).hidden = !inj.length;
+  $('#sScore', body).hidden = !scoring.length;
+  syncFeed($('#fInj', body), inj);
+  syncFeed($('#fScore', body), scoring);
+  syncFeed($('#fAll', body), plays);
 }
 // Short play cards: photo of who made the play, what they did, who stopped them, totals after the play.
 const pface = (x, cls) => `<span class="${cls}">${x.headshot ? `<img src="${esc(x.headshot)}" alt="" loading="lazy" onerror="this.remove()">` : ''}<i>${esc(initials(x.name))}</i></span>`;
