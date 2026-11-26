@@ -490,3 +490,4 @@ input, select { font: inherit; font-size: 16px; padding: 9px 10px; border: 1px s
 .golink { min-height: 32px; padding: 4px 10px; font-size: 13px; }
 .slipbet .appsel { grid-column: 1 / -1; }
 .slipbet select { font: inherit; font-weight: 800; color: var(--ink); background: var(--bg2); border: 1px solid var(--line); border-radius: 12px; padding: 8px 10px; }
+.grade.gwait { background: var(--s3); color: var(--mute); font-style: normal; }

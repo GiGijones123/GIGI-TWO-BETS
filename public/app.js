@@ -1325,22 +1325,32 @@ function parlayGrade(legs) {
   return { grade: g, chance: p * 100, dec, am: amOdds(dec), ev, notes };
 }
 
+// Work out the picks for every game today (and live ones), so bets and the builder can use them.
+let picksLoading = null;
+function loadTodayPicks({ includeLive = false } = {}) {
+  if (picksLoading) return picksLoading;
+  picksLoading = (async () => {
+    if (!S.games.length) await loadScoreboard();
+    const games = S.games.filter((g) => g.league !== 'nhl' && (g.state === 'pre' ? new Date(g.date) - Date.now() < 36 * 3600e3 : includeLive));
+    const queue = [...games];
+    const work = async () => {
+      while (queue.length) {
+        const g = queue.shift();
+        const [sum, tA, tH] = await Promise.all([loadSum(g.league, g.id, 10 * 60e3), loadTeam(g.league, g.away.id), loadTeam(g.league, g.home.id)]);
+        S.pickLists[g.id] = gamePicks(g, sum, tA?.numbers, tH?.numbers).list;
+      }
+    };
+    await Promise.all([work(), work(), work(), work()]);
+  })().finally(() => { picksLoading = null; });
+  return picksLoading;
+}
+
 async function renderBuilder() {
   const v = $('#view');
   v.innerHTML = `<h1>Bet builder</h1><p class="sub">Tap picks to build a parlay. It grades every pick and the whole parlay from A to F.</p><div id="slipBox"></div><h2>Today's picks</h2><div class="seg" style="margin-bottom:10px">${['all', ...ALL_LEAGUES].map((k) => `<button data-bfilter="${k}" aria-pressed="${(S.bFilter || 'all') === k}">${k === 'all' ? 'All' : LG[k].label.split(' ')[0]}</button>`).join('')}</div><div id="bPicks"><div class="skel"></div><div class="skel"></div></div>`;
   slipLoad();
   drawSlip();
-  if (!S.games.length) await loadScoreboard();
-  const games = S.games.filter((g) => g.state === 'pre' && g.league !== 'nhl' && new Date(g.date) - Date.now() < 36 * 3600e3);
-  const queue = [...games];
-  const work = async () => {
-    while (queue.length) {
-      const g = queue.shift();
-      const [sum, tA, tH] = await Promise.all([loadSum(g.league, g.id, 10 * 60e3), loadTeam(g.league, g.away.id), loadTeam(g.league, g.home.id)]);
-      S.pickLists[g.id] = gamePicks(g, sum, tA?.numbers, tH?.numbers).list;
-    }
-  };
-  await Promise.all([work(), work(), work(), work()]);
+  await loadTodayPicks();
   if (route().name !== 'builder') return;
   drawBuilderPicks();
 }
@@ -1477,9 +1487,36 @@ function legStatus(leg, g) {
   }
   return { cls: 'wait', text: g.state === 'in' ? 'Game is live' : 'Game over' };
 }
-function openBet(id) {
+async function fillLegs(b) {
+  const legs = betLegs(b);
+  if (legs.every((l) => l.gameId || l.tried || l.kind === 'prop')) return false;
+  await loadTodayPicks({ includeLive: true });
+  const all = Object.values(S.pickLists).flat();
+  const norm = (t) => String(t).toLowerCase().replace(/\s+/g, ' ').trim();
+  let changed = false;
+  const out = legs.map((l) => {
+    if (l.gameId) return l;
+    const m = all.find((p) => norm(p.pick) === norm(l.pick));
+    if (!m) {
+      // line may have moved: match a total by its number, a side by its team
+      const tot = /^(over|under)\s+(\d+(\.\d+)?)/i.exec(l.pick);
+      const g = tot ? S.games.find((x) => Math.abs((x.odds?.overUnder ?? S.sums[x.id]?.data?.game?.odds?.overUnder ?? -99) - parseFloat(tot[2])) <= 1.5) : findLegGame(l);
+      changed = true;
+      return g ? { ...l, game: `${g.away.abbr} @ ${g.home.abbr}`, gameId: g.id, league: g.league, kind: tot ? 'total' : 'spread', tried: true } : { ...l, tried: true };
+    }
+    changed = true;
+    return { ...l, game: m.game, gameId: m.gameId, league: m.league, kind: m.kind, est: m.est, odds: m.odds, grade: gradeOf(m.est, m.odds), why: m.why };
+  });
+  if (!changed) return false;
+  const nb = { ...b, legs: out };
+  try { await Bets.put([nb]); } catch { Object.assign(b, nb); }
+  return true;
+}
+
+function openBet(id, again = false) {
   const b = S.bets.find((x) => x.id === id);
   if (!b) return;
+  if (!again) fillLegs(b).then((ok) => { if (ok && $('#sheet').open && $('#sheet')._bet === id) openBet(id, true); });
   const legs = betLegs(b);
   const dlg = $('#sheet');
   const rows = legs.map((l) => {
@@ -1488,7 +1525,7 @@ function openBet(id) {
     const gr = l.grade || (l.est ? gradeOf(l.est, l.odds) : '');
     const score = g && g.state !== 'pre' ? `${g.away.abbr} ${g.away.score ?? 0} - ${g.home.score ?? 0} ${g.home.abbr}${g.state === 'in' ? ` · ${periodName(g)} ${g.clock}` : ' · Final'}` : '';
     return `<div class="obleg ${st?.cls || ''}">
-      ${gr ? `<span class="grade g${esc(gr)}">${esc(gr)}</span>` : l.call ? `<span class="call ${esc(l.call)}">${esc(l.call.toUpperCase())}</span>` : '<span class="grade" style="background:var(--s3);color:var(--mute)">?</span>'}
+      ${gr ? `<span class="grade g${esc(gr)}">${esc(gr)}</span>` : l.call ? `<span class="call ${esc(l.call)}">${esc(l.call.toUpperCase())}</span>` : (l.tried ? '<span class="grade gwait">–</span>' : '<span class="grade gwait">…</span>')}
       <div><b>${esc(l.pick)}</b><small>${esc([l.game || (g ? `${g.away.abbr} @ ${g.home.abbr}` : ''), l.est ? `${l.est}% estimated` : '', l.odds ? ml(Number(l.odds)) : ''].filter(Boolean).join(' · '))}</small>
       ${score ? `<small class="sc">${esc(score)}</small>` : ''}${l.why ? `<small>${esc(l.why)}</small>` : ''}</div>
       ${st ? `<span class="lst ${st.cls}">${esc(st.text)}</span>` : ''}
@@ -1501,6 +1538,7 @@ function openBet(id) {
     <h2 style="margin-top:14px">Your picks <span class="count">${legs.length}</span></h2>
     <div class="oblegs">${rows}</div>
     <p class="est" style="margin-top:12px">Winning or losing is worked out from the live score for sides and totals. Player props: check the player's card.</p></div>`;
+  dlg._bet = id;
   if (!dlg.open) dlg.showModal();
 }
 
