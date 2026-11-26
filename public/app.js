@@ -1287,7 +1287,7 @@ function drawBets() {
     </form>
     </div>
     ${done.length ? `<h2>Settled <span class="count">${done.length}</span></h2><div style="display:grid;gap:8px">${done.map(row).join('')}</div>` : ''}
-    <div class="note" style="margin-top:14px">${S.betsMode === 'cloud' ? '☁️ Saved to your account, so you see the same bets on any phone.' : `📱 Saved on this phone.${S.noDB ? '' : ' <a href="#" data-wlopen="signup">Make a free account</a> to keep them on any phone.'}`}</div>
+    <div class="note" style="margin-top:14px">${S.betsMode === 'cloud' ? '☁️ Saved to your account, so you see the same bets on any phone.' : '📱 Saved on this phone.'}</div>
     ${S.betsMode === 'cloud' && localCount ? `<button style="margin-top:8px" data-migrate>Move ${localCount} bets from this phone to the cloud</button>` : ''}`;
     })()}`;
 }
@@ -2092,7 +2092,7 @@ async function renderShare(r) {
         <div class="ckbtns"><button class="pri" data-sharecopy>🧱 Open in my Builder</button><button data-sharesave>Save to My bets</button></div>
         <p class="est">Grades and chances are estimates from ESPN numbers.</p>
       </div>
-      ${!S.user && !S.noDB ? '<div class="homebn" style="margin-top:14px"><span>🎯</span><div><b>Make your own picks</b><small>Free account: grades, live chances and alerts.</small></div><button class="pri" data-wlopen="signup">Sign up</button></div>' : ''}`;
+`;
   };
   v._share = sh;
   draw();
@@ -2176,7 +2176,6 @@ window.addEventListener('hashchange', render);
 (async () => {
   render();
   swReg();
-  Auth.me().then(() => { acctBtn(); if (!S.user && !store.get('welcomed', false) && route().name !== 'share') showWelcome('signup'); if (S.user) moveLocalBets().then(() => Bets.load()).then(() => { if (route().name === 'bets') render(); }); });
   Bets.load().then(() => { if (route().name === 'games') renderGamesBody(); fillAllOpen(); }).catch((e) => console.warn('open bets strip', e));
   await loadDaily();
   loadScoreboard();
