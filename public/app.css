@@ -371,3 +371,15 @@ input, select { font: inherit; font-size: 16px; padding: 9px 10px; border: 1px s
 .lb.popped { animation: glow 1.8s ease-out; }
 .lb.popped .pop-in { animation: popIn .4s cubic-bezier(.2,.8,.2,1) both; }
 @media (prefers-reduced-motion: reduce) { .play.slide-in, .lb.popped, .lb.popped .pop-in { animation: none; } }
+
+/* picks on the game page */
+#gpick .pickcard { margin: 12px 0 0; }
+#gpick.popped .pickcard { animation: glow 1.8s ease-out; }
+#gpick.popped .pop-in { animation: popIn .4s cubic-bezier(.2,.8,.2,1) both; }
+.chg { display: inline-block; margin-top: 6px; font-size: 13px; font-weight: 800; color: #241400; background: var(--warn); padding: 4px 9px; border-radius: 99px; }
+.props { display: grid; gap: 6px; margin-top: 10px; }
+.prop { background: var(--bg2); border-radius: 12px; padding: 8px 10px; font-size: 14px; }
+.prop.bad > div:first-child { text-decoration: line-through; color: var(--mute); }
+.hurtnote { margin: 8px 0 0; font-size: 14px; color: #ffd6dd; background: #ff4d6a22; border-radius: 10px; padding: 7px 9px; }
+.whyd { margin-top: 8px; }
+.whyd summary { cursor: pointer; font-weight: 800; color: var(--cyan, #36e2ff); font-size: 14px; }

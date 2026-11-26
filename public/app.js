@@ -113,7 +113,26 @@ function homeSpread(g, o) {
   return o.spread ?? null;
 }
 
-function estimate(g, sum, nA, nH) {
+// Players hurt during the game who have not come back (newest news wins).
+function hurtList(sum) {
+  const seen = new Map();
+  for (const p of sum?.liveInjuries || []) for (const x of p.injured || []) { const k = String(x.id || x.name); if (!seen.has(k)) seen.set(k, x); }
+  return [...seen.values()].filter((x) => !x.returned);
+}
+// How much one injury moves the expected margin, from what the player has done in this game.
+function hurtWeight(g, sum, x) {
+  const st = sum?.box?.[x.id]?.stats || {};
+  const L = LG[g.league];
+  if (L.sport === 'football') {
+    if ((st.passingAttempts || 0) >= 3) return { w: 5, role: 'the starting QB' };
+    if ((st.rushingAttempts || 0) >= 4 || (st.receptions || 0) >= 2 || (st.receivingYards || 0) >= 25 || (st.totalTackles || 0) >= 3) return { w: 1.5, role: 'a key player' };
+    return { w: 0.7, role: '' };
+  }
+  if (L.sport === 'basketball') return (st.minutes || 0) >= 15 || (st.points || 0) >= 8 ? { w: 3, role: 'a main player' } : { w: 1, role: '' };
+  return { w: 0, role: '' };
+}
+
+function estimate(g, sum, nA, nH, { ignoreHurt = false } = {}) {
   const L = LG[g.league];
   const o = sum?.odds?.[0] || g.odds;
   const reasons = [];
@@ -134,6 +153,17 @@ function estimate(g, sum, nA, nH) {
   }
   const picks = [];
   const hs = homeSpread(g, o);
+  // In-game injuries: shift the expected margin against the team that lost a player.
+  const hurt = ignoreHurt ? [] : hurtList(sum);
+  let shift = 0;
+  for (const x of hurt) {
+    const { w, role } = hurtWeight(g, sum, x);
+    const isHome = x.team === g.home.abbr;
+    if (!isHome && x.team !== g.away.abbr) continue;
+    shift += isHome ? -w : w;
+    reasons.push(`🚑 ${x.name} (${x.team})${role ? ', ' + role + ',' : ''} got hurt during the game and hasn't come back. That lowers ${isHome ? g.home.name : g.away.name}' chances, so the pick accounts for it.`);
+  }
+  if (shift) { if (margin === null && hs !== null) margin = -hs; if (margin !== null) margin += shift; }
   if (margin !== null && hs !== null && g.league !== 'nhl') {
     const diff = margin + hs; // > 0 means home beats the number
     const pct = clamp(50 + Math.abs(diff) * L.cover, 50, 66);
@@ -159,10 +189,14 @@ function estimate(g, sum, nA, nH) {
 
   picks.sort((a, b) => b.est - a.est);
   const cur = curatedPick(g);
-  if (cur) {
-    return { top: { pick: cur.pick, est: cur.est, odds: cur.odds, book: cur.book, why: cur.why, curated: true }, alt: picks, reasons };
+  // A hand-picked pick stands until someone gets hurt; then the live numbers take over.
+  if (cur && !(hurt.length && picks[0])) {
+    if (hurt.length) reasons.push('Someone got hurt after this pick was made, so double-check it before betting.');
+    return { top: { pick: cur.pick, est: cur.est, odds: cur.odds, book: cur.book, why: cur.why, curated: true }, alt: picks, reasons, hurt };
   }
-  return { top: picks[0] || null, alt: picks.slice(1), reasons };
+  // After an injury, lead with the side pick so it is clear how the injury moved it.
+  if (cur && hurt.length) { const sp = picks.find((x) => x.kind === 'spread'); if (sp) return { top: sp, alt: picks.filter((x) => x !== sp), reasons, hurt }; }
+  return { top: picks[0] || null, alt: picks.slice(1), reasons, hurt };
 }
 
 // ---------- data loading + live polling ----------
@@ -275,7 +309,6 @@ function renderGames() {
   v.innerHTML = `
     ${viewSwitch('today')}
     <div id="tickerWrap"></div>
-    <div id="picksWrap"></div>
     <div class="chips" id="chips" role="group" aria-label="Sport">
       ${['all', ...ALL_LEAGUES].map((k) => `<button data-filter="${k}" aria-pressed="${S.filter === k}">${k === 'all' ? 'All sports' : LG[k].label}</button>`).join('')}
     </div>
@@ -342,20 +375,6 @@ function renderGamesBody() {
       <p>${esc(t.text)}</p>
     </button>`).join('')}</div>` : '');
 
-  // top picks: the strongest estimates among games not yet started
-  const ps = [];
-  for (const g of shown.filter((x) => x.state === 'pre')) {
-    const sum = S.sums[g.id]?.data;
-    const e = estimate(g, sum);
-    if (e.top && (e.top.curated || e.top.est >= 54)) ps.push({ g, e });
-  }
-  ps.sort((a, b) => b.e.top.est - a.e.top.est);
-  setHTML($('#picksWrap'), ps.length ? `<h2>Top picks <span class="count">estimates</span></h2><div class="strip">${ps.slice(0, 6).map(({ g, e }) => `
-    <button class="hp" data-go="${g.league}/${g.id}">
-      <span class="k">${esc(LG[g.league].label)} · ${esc(g.away.abbr)} @ ${esc(g.home.abbr)} · ${esc(fmtDay(g.date))}</span>
-      <span class="p">${esc(e.top.pick)}</span>
-      <span class="w">${e.top.est}% estimated${e.top.curated ? ' · hand-picked' : ''}</span>
-    </button>`).join('')}</div>` : '');
 
   if (!shown.length) {
     setHTML($('#lists'), `<div class="empty">No ${S.filter === 'all' ? '' : LG[S.filter].label + ' '}games on the board right now.</div>`);
@@ -414,6 +433,7 @@ function findGame(r) {
 async function renderGame(r) {
   const v = $('#view');
   v.innerHTML = `<button class="back" data-back>‹ All games</button><div id="hero"><div class="skel" style="height:260px"></div></div>
+    <div id="gpick"></div>
     <div class="stick"><div class="seg" id="gtabs">${['matchup', 'lineups', 'plays'].map((t) => `<button data-gtab="${t}" aria-pressed="${S.gameTab === t}">${t === 'matchup' ? 'Matchup' : t === 'lineups' ? 'Lineups' : 'Play by play'}</button>`).join('')}</div></div>
     <div id="gbody"><div class="skel"></div></div>`;
   window.scrollTo(0, 0);
@@ -421,8 +441,39 @@ async function renderGame(r) {
   if (route().id !== r.id) return;
   if (!sum && !findGame(r)) { $('#gbody').innerHTML = '<div class="empty">Could not load this game. Pull down to refresh or try again in a minute.</div>'; return; }
   renderGameLive(r);
+  renderGamePick(r);
   renderGameBody(r);
   pollGame(r);
+}
+
+// Picks for this one game, right under the score. Re-worked on every update, so an injury moves it.
+async function renderGamePick(r) {
+  const box = $('#gpick');
+  if (!box) return;
+  const sum = S.sums[r.id]?.data;
+  const g = S.games.find((x) => x.id === r.id) || sum?.game;
+  if (!g) return;
+  const [tA, tH] = await Promise.all([loadTeam(g.league, g.away.id), loadTeam(g.league, g.home.id)]);
+  if (route().id !== r.id || !$('#gpick')) return;
+  const e = estimate(g, sum, tA?.numbers, tH?.numbers);
+  const base = estimate(g, sum, tA?.numbers, tH?.numbers, { ignoreHurt: true });
+  const changed = e.top && base.top && base.top.pick !== e.top.pick;
+  const hurtIds = new Set((e.hurt || []).map((x) => x.name));
+  const outNames = new Set(Object.values(sum?.injuries || {}).flat().filter((i) => /out|ir|doubt|susp/i.test(i.status)).map((i) => i.name));
+  const props = (S.daily?.props || []).filter((x) => x.game === gameKey(g));
+  if (!e.top && !props.length) { swapIn(box, '', 'none'); return; }
+  const label = g.state === 'pre' ? 'Picks for this game' : g.state === 'in' ? 'Picks · updated live' : 'Pre-game picks';
+  const html = `<div class="sec pickcard">
+    <div class="hd"><h3>${label}</h3>${e.top ? `<span class="tag t-pick">${e.top.est}% estimated</span>` : ''}</div>
+    ${e.top ? `<div class="pop-in"><div class="p">${esc(e.top.pick)}</div>
+      ${changed ? `<div class="chg">🔄 Changed after an injury · was ${esc(base.top.pick)}</div>` : ''}
+      ${e.top.why ? `<p style="margin:6px 0 0">${esc(e.top.why)}</p>` : ''}
+      ${e.reasons.filter((x) => x.startsWith('🚑')).map((x) => `<p class="hurtnote">${esc(x)}</p>`).join('')}
+      ${e.reasons.some((x) => !x.startsWith('🚑')) ? `<details class="whyd"><summary>Why this pick</summary><ul class="why">${e.reasons.filter((x) => !x.startsWith('🚑')).map((x) => `<li>${esc(x)}</li>`).join('')}</ul></details>` : ''}
+      ${e.alt.length ? `<div class="odds">${e.alt.map((p) => `<span><b>Also</b>${esc(p.pick)} · ${p.est}%</span>`).join('')}</div>` : ''}</div>` : ''}
+    ${props.length ? `<div class="props">${props.map((x) => { const bad = hurtIds.has(x.player) || outNames.has(x.player); return `<div class="prop ${bad ? 'bad' : ''}"><div><b>${esc(x.player)}</b> ${esc(x.lean)} ${esc(x.line)} ${esc(String(x.stat).toLowerCase())}</div><div class="est">${bad ? '⚠️ Hurt or ruled out, skip this one' : `${x.est}% estimated · ${esc(x.why)}`}</div></div>`; }).join('')}</div>` : ''}
+    <div class="est">Estimates from ESPN's win model, season scoring, the line and injuries. Not a sure thing.</div></div>`;
+  swapIn(box, html, `${e.top?.pick}|${(e.hurt || []).length}`);
 }
 
 function pollGame(r) {
@@ -435,6 +486,7 @@ function pollGame(r) {
     await loadSum(r.league, r.id, 0);
     if (route().id !== r.id) return;
     renderGameLive(r);
+    renderGamePick(r);
     if (S.gameTab === 'plays' && S.sums[r.id]?.data?.plays?.[0]?.id !== before) renderGameBody(r);
     pollGame(r);
   }, live ? 8e3 : 60e3);
@@ -545,12 +597,6 @@ function renderMatchup(body, g, sum, tA, tH) {
   };
 
   body.innerHTML = `
-    ${e.top ? `<div class="sec pickcard"><div class="hd"><h3>${g.state === 'pre' ? 'Our pick' : 'Pre-game pick'}</h3><span class="tag t-pick">${e.top.est}% estimated</span></div>
-      <div class="p">${esc(e.top.pick)}</div>
-      ${e.top.why ? `<p style="margin:0">${esc(e.top.why)}</p>` : ''}
-      <ul class="why">${e.reasons.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>
-      ${e.alt.length ? `<div class="odds">${e.alt.map((p) => `<span><b>Also</b>${esc(p.pick)} · ${p.est}%</span>`).join('')}</div>` : ''}
-      <div class="est">An estimate from ESPN's win model, season scoring and the line. Not a sure thing.</div></div>` : ''}
     ${cg?.note ? `<div class="sec"><h3>The story</h3><p style="margin:0">${esc(cg.note)}</p></div>` : ''}
     <div class="sec"><div class="hd"><h3>Odds</h3><span class="est">updates live</span></div>
       ${books.length ? `<div class="scroll"><table><thead><tr><th>Book</th><th>Spread</th><th class="n">Total</th><th class="n">${esc(g.away.abbr)} ML</th><th class="n">${esc(g.home.abbr)} ML</th></tr></thead><tbody>
