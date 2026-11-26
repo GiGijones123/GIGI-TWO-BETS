@@ -279,6 +279,7 @@ function route() {
   if (a === 'bets') return { name: 'bets' };
   if (a === 'news') return { name: 'news' };
   if (a === 'check') return { name: 'check' };
+  if (a === 'guide') return { name: 'guide' };
   if (a === 'season') return { name: 'season' };
   return { name: 'games' };
 }
@@ -289,12 +290,13 @@ let gameTimer = null;
 function render() {
   const r = route();
   clearTimeout(gameTimer);
-  setTab(r.name === 'game' || r.name === 'season' ? 'games' : r.name);
+  setTab(r.name === 'game' || r.name === 'season' ? 'games' : r.name === 'guide' ? 'bets' : r.name);
   if (r.name === 'games') renderGames();
   else if (r.name === 'game') renderGame(r);
   else if (r.name === 'season') renderSeason();
   else if (r.name === 'bets') renderBets();
   else if (r.name === 'check') renderCheck();
+  else if (r.name === 'guide') renderGuide();
   else renderNews();
 }
 function onData() {
@@ -1034,7 +1036,7 @@ const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(
 
 async function renderBets() {
   const v = $('#view');
-  v.innerHTML = `<h1>My bets</h1><p class="sub">Log every bet to see if you are up or down.</p><div id="betsBody"><div class="skel"></div></div>`;
+  v.innerHTML = `<h1>My bets</h1><p class="sub">Log every bet to see if you are up or down.</p><a class="guidebtn" href="#/guide"><span>💰</span><div><b>Money guide</b><small>Find your unit size and how much to bet</small></div><i>›</i></a><div id="betsBody"><div class="skel"></div></div>`;
   await Bets.load();
   if (route().name !== 'bets') return;
   drawBets();
@@ -1241,6 +1243,68 @@ async function runCheck() {
   if (route().name === 'check') drawCheck();
 }
 
+// ---------- MONEY GUIDE ----------
+// Bankroll + unit calculator. Everything stays on this phone.
+const RISK = { careful: { pct: 1, label: 'Careful', note: '1% a unit. Best when you are starting out or on a losing run.' }, standard: { pct: 2, label: 'Standard', note: '2% a unit. What most steady bettors use.' }, bold: { pct: 3, label: 'Bold', note: '3% a unit. Bigger swings. Never go above 5%.' } };
+const usd = (v) => `$${(Math.round(v * 100) / 100).toFixed(v >= 100 ? 0 : 2).replace(/\.00$/, '')}`;
+
+async function renderGuide() {
+  const v = $('#view');
+  v.innerHTML = `<button class="back" data-back>‹ My bets</button><h1>Money guide</h1><p class="sub">Set aside money just for betting, then bet the same small slice of it every time. That slice is your unit.</p><div id="guideBody"><div class="skel"></div></div>`;
+  if (!S.bets?.length) await Bets.load().catch(() => {});
+  if (route().name !== 'guide') return;
+  drawGuide();
+}
+
+function drawGuide() {
+  const el = $('#guideBody');
+  if (!el) return;
+  const roll = Number(store.get('bankroll', 0)) || 0;
+  const risk = RISK[store.get('risk', 'standard')] ? store.get('risk', 'standard') : 'standard';
+  const since = store.get('bankrollDate', '');
+  const settled = (S.bets || []).filter((b) => b.status !== 'pending' && (!since || String(b.date) >= since));
+  const net = settled.reduce((t, b) => t + profit(b), 0);
+  const now = Math.max(0, roll + net);
+  const unit = (now * RISK[risk].pct) / 100;
+  const pendingStake = (S.bets || []).filter((b) => b.status === 'pending').reduce((t, b) => t + (Number(b.stake) || 0), 0);
+  const sizes = [
+    ['Lean', 0.5, 'A small edge or a long shot. "Close to a coin flip" picks.'],
+    ['Normal bet', 1, 'Most bets. A pick you like at a fair price.'],
+    ['Strong', 1.5, 'Numbers and news both point the same way.'],
+    ['Max', 2, 'Rare. Never more than 2 units on one bet.'],
+    ['Parlay or PrizePicks entry', 0.5, 'All picks must hit, so keep these small. 0.25 to 0.5 units.'],
+  ];
+  el.innerHTML = `
+    <form class="sec calc" id="guideForm">
+      <label>Your betting money ($)<input name="roll" inputmode="decimal" placeholder="e.g. 200" value="${roll || ''}"></label>
+      <div class="seg" style="margin-top:10px">${Object.entries(RISK).map(([k, r]) => `<button type="button" data-risk="${k}" aria-pressed="${risk === k}">${r.label} ${r.pct}%</button>`).join('')}</div>
+      <div class="est" style="margin-top:6px">${esc(RISK[risk].note)}</div>
+      <button class="pri" type="submit" style="margin-top:10px;width:100%">Save</button>
+    </form>
+    ${roll ? `
+    <div class="unitcard">
+      <div class="ul">1 unit</div><div class="uv">${usd(unit)}</div>
+      <div class="us">${RISK[risk].pct}% of ${usd(now)}${settled.length ? ` · you started with ${usd(roll)} and are ${net >= 0 ? 'up' : 'down'} ${usd(Math.abs(net))}` : ''}</div>
+    </div>
+    <h2>How much to bet</h2>
+    <div class="sizes">${sizes.map(([n, u, w]) => `<div class="sz"><div><b>${n}</b><small>${w}</small></div><div class="amt">${usd(unit * u)}<small>${u} u</small></div></div>`).join('')}</div>
+    <div class="note" style="margin-top:10px">Your unit updates by itself as you win or lose, using the bets in My bets. When you are up, it grows a little. When you are down, it shrinks so you don't dig a deeper hole.</div>
+    ${pendingStake > unit * 5 ? `<div class="note warnbox">⚠️ You have ${usd(pendingStake)} riding on open bets. That is more than 5 units at once. Slow down until some of them settle.</div>` : ''}
+    ` : '<div class="empty">Type in how much money you have set aside for betting to see your unit.</div>'}
+    <h2>The rules</h2>
+    <ol class="rules">
+      <li><b>Only bet money you can lose.</b> Your betting money is separate from rent, bills and food. Once it's gone, stop.</li>
+      <li><b>Bet the same unit every time.</b> Don't bet 5 units because you "feel it". Size goes up only with the numbers, never with emotions.</li>
+      <li><b>Never chase.</b> After a loss, the next bet stays the same size. Doubling up to win it back is how bankrolls disappear.</li>
+      <li><b>Daily limit: 5 units.</b> No more than 5 units in play at once, and stop for the day if you lose 3 units.</li>
+      <li><b>Parlays are treats, not meals.</b> Each extra leg makes it much less likely to hit. Keep them at 0.5 units or less.</li>
+      <li><b>Log every bet.</b> Use My bets or AI Check so you see the truth about what's working.</li>
+      <li><b>Shop the line.</b> -105 instead of -115 adds up over a season. Check the odds table on each game.</li>
+      <li><b>Take breaks.</b> If it stops being fun, step away for a few days.</li>
+    </ol>
+    <p class="est">Need help? Call or text 1-800-GAMBLER, any time, free.</p>`;
+}
+
 // ---------- NEWS ----------
 async function renderNews() {
   const v = $('#view');
@@ -1284,6 +1348,7 @@ document.addEventListener('click', async (e) => {
   if (t.dataset.pseason) { $('#sheet')._season(t.dataset.pseason); return; }
   if (t.dataset.stat) { $('#sheet')._redraw((s) => { s.stat = t.dataset.stat; s.line = null; }); return; }
   if (t.dataset.line) { $('#sheet')._redraw((s) => { s.line = Math.max(0.5, s.line + Number(t.dataset.line)); }); return; }
+  if (t.dataset.risk) { store.set('risk', t.dataset.risk); drawGuide(); return; }
   if (t.dataset.pf) { S.playFilter = t.dataset.pf; renderGameBody(route()); return; }
   if (t.dataset.period) { S.period = t.dataset.period; drawBets(); return; }
   if (t.hasAttribute('data-ckgo')) { runCheck(); return; }
@@ -1311,6 +1376,13 @@ document.addEventListener('change', async (e) => {
   drawBets();
 });
 document.addEventListener('submit', async (e) => {
+  if (e.target.id === 'guideForm') {
+    e.preventDefault();
+    const v = Number(String(new FormData(e.target).get('roll')).replace(/[$,]/g, '')) || 0;
+    if (v !== Number(store.get('bankroll', 0))) { store.set('bankroll', v); store.set('bankrollDate', today()); }
+    drawGuide();
+    return;
+  }
   if (e.target.id !== 'betForm' && e.target.id !== 'ckForm') return;
   e.preventDefault();
   const f = Object.fromEntries(new FormData(e.target));

@@ -412,3 +412,24 @@ input, select { font: inherit; font-size: 16px; padding: 9px 10px; border: 1px s
 .seg.pf .count { font-size: 12px; background: var(--s2); color: var(--mute); padding: 2px 7px; border-radius: 99px; }
 .seg.pf button { white-space: nowrap; }
 .tag.live-hurt { animation: blink 1.6s ease-in-out 3; }
+
+/* money guide */
+.guidebtn { display: grid; grid-template-columns: auto 1fr auto; gap: 12px; align-items: center; text-decoration: none; color: var(--ink); background: linear-gradient(135deg, #b6ff3b22, #36e2ff14); border: 1px solid #b6ff3b66; border-radius: 18px; padding: 12px 14px; margin: 4px 0 14px; }
+.guidebtn > span { font-size: 28px; }
+.guidebtn b { display: block; font: 800 20px/1 var(--disp); text-transform: uppercase; color: var(--lime); }
+.guidebtn small { color: var(--mute); font-size: 13px; }
+.guidebtn i { font-style: normal; font-size: 26px; color: var(--lime); }
+.calc label { display: grid; gap: 6px; font-weight: 800; font-size: 14px; color: var(--mute); }
+.calc input { font: inherit; font-size: 22px; font-weight: 800; color: var(--ink); background: var(--bg2); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; }
+.unitcard { margin-top: 14px; text-align: center; padding: 20px 16px; border-radius: 22px; background: linear-gradient(160deg, var(--lime), #7dffb0); color: var(--bg); }
+.unitcard .ul { font: 800 16px/1 var(--disp); text-transform: uppercase; letter-spacing: .06em; }
+.unitcard .uv { font: italic 900 64px/1 var(--disp); margin: 4px 0; }
+.unitcard .us { font-size: 14px; font-weight: 700; opacity: .8; }
+.sizes { display: grid; gap: 8px; }
+.sz { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; background: var(--s1); border: 1px solid var(--line); border-radius: 16px; padding: 12px 14px; }
+.sz b { display: block; } .sz small { color: var(--mute); font-size: 13px; }
+.sz .amt { text-align: right; font: 800 24px/1 var(--disp); color: var(--lime); }
+.sz .amt small { display: block; font: 700 12px/1.4 Figtree, sans-serif; color: var(--mute); }
+.warnbox { margin-top: 8px; border-color: var(--warn); color: #ffd79a; }
+.rules { margin: 0; padding-left: 22px; display: grid; gap: 8px; color: var(--mute); }
+.rules b { color: var(--ink); }
