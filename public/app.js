@@ -24,7 +24,7 @@ const S = {
   filter: store.get('filter', 'all'),
   gameTab: 'matchup', side: 'away', unit: 'offense',
   bets: [], betsMode: 'local', betsNeedPass: false, period: 'week',
-  lastSeen: {}, flash: new Set(), pickLists: {}, slip: [],
+  lastSeen: {}, flash: new Set(), pickLists: {}, slip: [], autoProps: {},
 };
 
 async function api(path, opts) {
@@ -211,6 +211,63 @@ function gradeOf(est, odds = -110) {
 }
 const kindLabel = { spread: 'Side', total: 'Total', prop: 'Player prop' };
 
+// Player picks made from each key player's recent games. We pick a "safe line" a bit under what
+// he usually does, then estimate how often he clears it. Real app lines may differ.
+const PROP_STATS = { QB: ['passingYards'], RB: ['rushingYards', 'receptions'], WR: ['receivingYards', 'receptions'], TE: ['receivingYards', 'receptions'], NBA: ['points', 'rebounds', 'assists', 'threePointFieldGoalsMade'] };
+const PROP_ODDS = -200;
+async function loadPlayer(league, id) {
+  const k = `${league}:${id}`;
+  if (S.players[k]) return S.players[k];
+  try { const p = await api(`/api/player?league=${league}&id=${id}`); S.players[k] = p; return p; } catch { return null; }
+}
+function propFromLog(p, stats) {
+  let best = null;
+  for (const st of stats) {
+    const vals = (p.log?.games || []).map((x) => x.stats?.[st]).filter((v) => v !== null && v !== undefined).slice(0, 10);
+    if (vals.length < 5) continue;
+    const sorted = [...vals].sort((a, b) => a - b);
+    const q = sorted[Math.floor(vals.length * 0.2)];
+    const line = Math.floor(q) - 0.5;
+    if (line < (st === 'threePointFieldGoalsMade' || st === 'receptions' || st === 'assists' || st === 'rebounds' ? 1.5 : 9.5)) continue;
+    const hits = vals.filter((v) => v > line).length;
+    const est = Math.round(((hits + 1) / (vals.length + 2)) * 88);
+    const avg = Math.round((vals.reduce((a, b) => a + b, 0) / vals.length) * 10) / 10;
+    if (!best || est > best.est) best = { st, line, hits, n: vals.length, est, avg };
+  }
+  return best;
+}
+async function autoProps(g) {
+  const c = S.autoProps[g.id];
+  if (c && Date.now() - c.at < 20 * 60e3) return c.list;
+  if (g.league === 'nhl' || g.league === 'cfb') return [];
+  const [tA, tH] = await Promise.all([loadTeam(g.league, g.away.id), loadTeam(g.league, g.home.id)]);
+  const cands = [];
+  for (const [t, team] of [[tA, g.away], [tH, g.home]]) {
+    if (!t?.lineup) continue;
+    if (g.league === 'nba') for (const x of (t.lineup.starters || []).slice(0, 5)) cands.push({ ...x, pos: 'NBA', team });
+    else {
+      const off = t.lineup.offense || [];
+      const take = (re, n) => off.filter((x) => re.test(x.label)).slice(0, n);
+      for (const x of [...take(/^QB$/, 1), ...take(/^RB$|^HB$/, 1), ...take(/^WR$/, 2), ...take(/^TE$/, 1)]) cands.push({ ...x, pos: x.label === 'HB' ? 'RB' : x.label, team });
+    }
+  }
+  const list = [];
+  await Promise.all(cands.filter((x) => x.id).map(async (x) => {
+    const p = await loadPlayer(g.league, x.id);
+    if (!p || /out|doubt|injured reserve/i.test(p.bio?.injury || '')) return;
+    const best = propFromLog(p, PROP_STATS[x.pos] || []);
+    if (!best || best.est < 62) return;
+    const name = p.bio?.name || x.name;
+    const lbl = (STAT_LABEL[best.st] || best.st).toLowerCase();
+    list.push({ id: `${g.id}:prop:${x.id}:${best.st}`, gameId: g.id, league: g.league, game: `${g.away.abbr} @ ${g.home.abbr}`, kind: 'prop', pick: `${name} over ${best.line} ${lbl}`, player: name, playerId: x.id, est: best.est, odds: PROP_ODDS, why: `Went over ${best.line} in ${best.hits} of his last ${best.n} games (averages ${best.avg}). Check your app's line; it may be higher.`, auto: true });
+  }));
+  const seen = new Set();
+  const uniq = list.filter((x) => (seen.has(x.player) ? false : seen.add(x.player)));
+  S.autoProps[g.id] = { at: Date.now(), list: uniq };
+  return uniq;
+}
+
+
 // Every pick we have for one game (side, total, player props), best first.
 function gamePicks(g, sum, nA, nH) {
   const e = estimate(g, sum, nA, nH);
@@ -226,6 +283,8 @@ function gamePicks(g, sum, nA, nH) {
     const bad = hurt.has(x.player) || out.has(x.player);
     list.push({ id: `${g.id}:prop:${x.player}:${x.stat}`, gameId: g.id, league: g.league, game: label, kind: 'prop', pick: `${x.player} ${x.lean} ${x.line} ${String(x.stat).toLowerCase()}`, est: x.est, odds: x.odds || -115, why: x.why, bad });
   }
+  const have = new Set(list.filter((x) => x.kind === 'prop').map((x) => x.pick.split(' ').slice(0, 2).join(' ')));
+  for (const x of S.autoProps[g.id]?.list || []) if (!have.has(x.player.split(' ').slice(0, 2).join(' ')) && !hurt.has(x.player) && !out.has(x.player)) list.push(x);
   list.sort((a, b) => (b.bad ? -99 : b.est - breakEven(b.odds)) - (a.bad ? -99 : a.est - breakEven(a.odds)));
   return { e, list };
 }
@@ -495,6 +554,7 @@ async function renderGamePick(r) {
   if (!g) return;
   const [tA, tH] = await Promise.all([loadTeam(g.league, g.away.id), loadTeam(g.league, g.home.id)]);
   if (route().id !== r.id || !$('#gpick')) return;
+  if (!S.autoProps[g.id] && g.state === 'pre') autoProps(g).then(() => { if (route().id === r.id) { $('#gpick')._h = null; renderGamePick(r); } });
   const { e, list } = gamePicks(g, sum, tA?.numbers, tH?.numbers);
   const base = estimate(g, sum, tA?.numbers, tH?.numbers, { ignoreHurt: true });
   const changed = e.top && base.top && base.top.pick !== e.top.pick;
@@ -518,7 +578,7 @@ async function renderGamePick(r) {
     <div class="est">Estimates from ESPN's win model, season scoring, the line and injuries. Not a sure thing.</div></div>`;
   S.pickLists[g.id] = list;
   const sc0 = $('.pslides', box); const x0 = sc0?.scrollLeft || 0;
-  swapIn(box, html, `${e.top?.pick}|${(e.hurt || []).length}`);
+  swapIn(box, html, `${e.top?.pick}|${(e.hurt || []).length}|${list.length}`);
   const sc = $('.pslides', box);
   if (sc && sc !== sc0) { sc.scrollLeft = x0; }
   if (sc && !sc._l) {
@@ -1360,6 +1420,7 @@ function loadTodayPicks({ includeLive = false } = {}) {
       while (queue.length) {
         const g = queue.shift();
         const [sum, tA, tH] = await Promise.all([loadSum(g.league, g.id, 10 * 60e3), loadTeam(g.league, g.away.id), loadTeam(g.league, g.home.id)]);
+        if (g.state === 'pre') await autoProps(g).catch(() => []);
         S.pickLists[g.id] = gamePicks(g, sum, tA?.numbers, tH?.numbers).list;
       }
     };
@@ -1370,7 +1431,7 @@ function loadTodayPicks({ includeLive = false } = {}) {
 
 async function renderBuilder() {
   const v = $('#view');
-  v.innerHTML = `<h1>Bet builder</h1><p class="sub">Tap picks to build a parlay. It grades every pick and the whole parlay from A to F.</p><div id="slipBox"></div><h2>Today's picks</h2><div class="seg" style="margin-bottom:10px">${['all', ...ALL_LEAGUES].map((k) => `<button data-bfilter="${k}" aria-pressed="${(S.bFilter || 'all') === k}">${k === 'all' ? 'All' : LG[k].label.split(' ')[0]}</button>`).join('')}</div><div id="bPicks"><div class="skel"></div><div class="skel"></div></div>`;
+  v.innerHTML = `<h1>Bet builder</h1><p class="sub">Tap picks to build a parlay. It grades every pick and the whole parlay from A to F.</p><div id="slipBox"></div><h2>Today's picks</h2><div class="seg" style="margin-bottom:10px">${['all', 'props', ...ALL_LEAGUES.filter((k) => k !== 'nhl')].map((k) => `<button data-bfilter="${k}" aria-pressed="${(S.bFilter || 'all') === k}">${k === 'all' ? 'All' : k === 'props' ? 'Players' : LG[k].label.split(' ')[0]}</button>`).join('')}</div><div id="bPicks"><div class="skel"></div><div class="skel"></div></div>`;
   slipLoad();
   drawSlip();
   await loadTodayPicks();
@@ -1382,10 +1443,10 @@ function drawBuilderPicks() {
   const el = $('#bPicks');
   if (!el) return;
   const f = S.bFilter || 'all';
-  const all = Object.values(S.pickLists).flat().filter((p) => !p.bad && (f === 'all' || p.league === f) && S.games.some((g) => g.id === p.gameId && g.state === 'pre'));
+  const all = Object.values(S.pickLists).flat().filter((p) => !p.bad && (f === 'all' || (f === 'props' ? p.kind === 'prop' : p.league === f)) && S.games.some((g) => g.id === p.gameId && g.state === 'pre'));
   all.sort((a, b) => (b.est - breakEven(b.odds)) - (a.est - breakEven(a.odds)));
   const inSlip = new Set(S.slip.map((x) => x.id));
-  el.innerHTML = all.length ? `<div class="blist">${all.map((p) => { const gr = gradeOf(p.est, p.odds); return `<button class="bpick ${inSlip.has(p.id) ? 'on' : ''}" data-addleg="${esc(p.id)}"><span class="grade g${gr}">${gr}</span><span class="bp"><b>${esc(p.pick)}</b><small>${esc(LG[p.league].label)} · ${esc(p.game)} · ${esc(kindLabel[p.kind])} · ${p.est}% · ${esc(ml(p.odds))}</small></span><span class="plus">${inSlip.has(p.id) ? '✓' : '+'}</span></button>`; }).join('')}</div>` : '<div class="empty">No picks for upcoming games right now. Check back closer to game time.</div>';
+  el.innerHTML = all.length ? `<div class="blist">${all.map((p) => { const gr = gradeOf(p.est, p.odds); return `<button class="bpick ${inSlip.has(p.id) ? 'on' : ''}" data-addleg="${esc(p.id)}"><span class="grade g${gr}">${gr}</span><span class="bp"><b>${esc(p.pick)}</b><small>${esc(LG[p.league].label)} · ${esc(p.game)} · ${esc(kindLabel[p.kind])}${p.auto ? ' (safe line)' : ''} · ${p.est}% · ${esc(ml(p.odds))}</small></span><span class="plus">${inSlip.has(p.id) ? '✓' : '+'}</span></button>`; }).join('')}</div>` : '<div class="empty">No picks for upcoming games right now. Check back closer to game time.</div>';
 }
 
 function drawSlip() {
