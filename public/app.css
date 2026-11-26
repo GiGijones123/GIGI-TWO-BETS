@@ -308,3 +308,23 @@ input, select { font: inherit; font-size: 16px; padding: 9px 10px; border: 1px s
   .pphoto { height: 116px; }
 }
 @media (prefers-reduced-motion: reduce) { *, *::before { animation: none !important; } }
+
+/* play cards */
+.pbody { display: grid; gap: 6px; min-width: 0; }
+.ptext { color: #dcd8ff; }
+.actor { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px; align-items: center; }
+.actor .ph { position: relative; width: 34px; height: 34px; border-radius: 50%; overflow: hidden; background: var(--s3); display: grid; place-items: center; flex: none; }
+.actor .ph.big { width: 56px; height: 56px; border-radius: 16px; background: linear-gradient(170deg, #ff9b3d, #e2541b); }
+.actor .ph img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: top; }
+.actor .ph i { font: 800 15px/1 var(--disp); font-style: normal; color: #fff9; }
+.actor .an { font-weight: 800; }
+.actor:not(.sm) .an { font: 800 19px/1.05 var(--disp); text-transform: uppercase; }
+.actor:not(.sm) .al { font-size: 15px; font-weight: 800; color: var(--lime); }
+.actor .at { font-size: 12px; font-weight: 700; color: var(--mute); }
+.actor.sm { font-size: 13px; }
+.actor.sm .al { color: var(--cyan); font-weight: 700; }
+.actor.sm .at::before { content: "· "; }
+.actor.injr .al { color: var(--loss); }
+.play.void { opacity: .55; }
+.lb .actor:not(.sm) .an { font-size: 17px; }
+.actor.injr.back .al { color: var(--win); }

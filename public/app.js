@@ -299,8 +299,9 @@ function renderGamesBody() {
   const items = [];
   for (const g of live) {
     const inj = S.sums[g.id]?.data?.liveInjuries?.[0];
-    if (inj) items.push({ g, text: inj.text, inj: true, when: `${inj.periodLabel || periodName(g)} ${inj.clock}` });
-    if (g.lastPlay) items.push({ g, text: g.lastPlay, when: `${periodName(g)} ${g.clock}` });
+    if (inj) items.push({ g, text: injShort(inj), inj: true, when: `${inj.periodLabel || periodName(g)} ${inj.clock}` });
+    const lp = S.sums[g.id]?.data?.plays?.[0];
+    if (lp || g.lastPlay) items.push({ g, text: lp ? playShort(lp) : g.lastPlay, when: `${periodName(g)} ${g.clock}` });
   }
   setHTML($('#tickerWrap'), items.length ? `<h2>Live feed <span class="count">${live.length} live</span></h2><div class="ticker">${items.map((t) => `
     <button class="tick ${t.inj ? 'inj' : ''} ${S.flash.has(t.inj ? 'inj' + t.g.id : t.g.id) ? 'flash' : ''}" data-go="${t.g.league}/${t.g.id}">
@@ -364,8 +365,8 @@ function gameCard(g) {
     <div class="gtop"><span class="tag t-lg">${esc(LG[g.league].label)}</span><span>${esc(g.venue || '')}</span></div>
     ${row(g.away, g.home)}${row(g.home, g.away)}
     ${when}
-    ${live && g.lastPlay ? `<div class="lp ${S.flash.has(g.id) ? 'flash' : ''}"><b>Last play</b>${esc(g.lastPlay)}</div>` : ''}
-    ${inj ? `<div class="lp inj"><b style="color:var(--loss)">Injury</b>${esc(inj.text)}</div>` : ''}
+    ${live && g.lastPlay ? `<div class="lp ${S.flash.has(g.id) ? 'flash' : ''}"><b>Last play</b>${esc(sum?.plays?.[0] ? playShort(sum.plays[0]) : g.lastPlay)}</div>` : ''}
+    ${inj ? `<div class="lp inj"><b style="color:var(--loss)">Injury</b>${esc(injShort(inj))}</div>` : ''}
     ${o ? `<div class="odds">${o.details ? `<span><b>${g.league === 'nhl' ? 'Favorite' : 'Spread'}</b>${esc(o.details)}</span>` : ''}${o.overUnder ? `<span><b>O/U</b>${o.overUnder}</span>` : ''}${o.awayML ? `<span><b>ML</b>${esc(g.away.abbr)} ${ml(o.awayML)} · ${esc(g.home.abbr)} ${ml(o.homeML)}</span>` : ''}</div>` : ''}
     ${outLine}
     ${e?.top ? `<div><span class="tag t-pick">Pick: ${esc(e.top.pick)} · ${e.top.est}%</span></div>` : ''}
@@ -430,8 +431,8 @@ function renderGameLive(r) {
   const lastPlay = sum?.plays?.[0];
   const inj = sum?.liveInjuries?.[0];
   const box = live || post ? `<div class="livebox">
-      <div class="lb ${S.flash.has(g.id) ? 'flash' : ''}"><div class="k">${live ? 'Latest play' : 'Final play'} <span>${lastPlay ? esc(`${lastPlay.periodLabel || ''} ${lastPlay.clock}`) : ''}</span></div>${esc(lastPlay?.text || g.lastPlay || 'Waiting for the first play')}</div>
-      <div class="lb inj ${S.flash.has('inj' + g.id) ? 'flash' : ''}"><div class="k">Latest injury <span>${inj ? esc(`${inj.periodLabel || ''} ${inj.clock}`) : ''}</span></div>${esc(inj?.text || 'No in-game injuries reported so far.')}</div>
+      <div class="lb ${S.flash.has(g.id) ? 'flash' : ''}"><div class="k">${live ? 'Latest play' : 'Final play'} <span>${lastPlay ? esc(`${lastPlay.periodLabel || ''} ${lastPlay.clock}`) : ''}</span></div>${lastPlay ? actorsHTML(lastPlay, { compact: true }) : esc(g.lastPlay || 'Waiting for the first play')}</div>
+      <div class="lb inj ${S.flash.has('inj' + g.id) ? 'flash' : ''}"><div class="k">Latest injury <span>${inj ? esc(`${inj.periodLabel || ''} ${inj.clock}`) : ''}</span></div>${inj ? (inj.injured?.length ? injuredHTML(inj) : esc(inj.text)) : 'No in-game injuries reported so far.'}</div>
     </div>` : '';
   el.innerHTML = `<div class="hero" style="--ca:${esc(g.away.color)};--ch:${esc(g.home.color)}">
     <div class="vs">${side(g.away)}<div class="mid">${mid}</div>${side(g.home)}</div>${wp}${box}</div>`;
@@ -624,7 +625,23 @@ function renderPlays(body, g, sum) {
     ${scoring.length ? `<div class="sec"><h3>Scoring plays</h3><div class="feed">${scoring.slice(0, 12).map((p) => playRow(p)).join('')}</div></div>` : ''}
     <div class="sec"><div class="hd"><h3>Every play</h3><span class="est">newest first · updates every few seconds</span></div><div class="feed">${plays.map((p) => playRow(p)).join('')}</div></div>`;
 }
-const playRow = (p) => `<div class="play ${p.injury ? 'inj' : p.scoring ? 'score' : ''}"><div class="t"><b>${esc(p.clock)}</b>${esc(p.periodLabel || (p.period ? 'Q' + p.period : ''))}</div><div>${p.type || p.team ? `<div class="ty">${esc(p.team)}${p.team && p.type ? ' · ' : ''}${esc(p.type)}</div>` : ''}${esc(p.text)}${p.scoring && p.away !== null ? ` <b>(${p.away}-${p.home})</b>` : ''}</div></div>`;
+// Short play cards: photo of who made the play, what they did, who stopped them, totals after the play.
+const pface = (x, cls) => `<span class="${cls}">${x.headshot ? `<img src="${esc(x.headshot)}" alt="" loading="lazy" onerror="this.remove()">` : ''}<i>${esc(initials(x.name))}</i></span>`;
+function actorsHTML(p, { compact = false } = {}) {
+  const who = p.who || [];
+  const def = p.defense || [];
+  if (!who.length && !def.length) return `<div class="ptext">${esc(p.text)}</div>`;
+  const [m, ...rest] = who;
+  let h = '';
+  if (m) h += `<div class="actor">${pface(m, 'ph big')}<div><div class="an">${esc(m.name)}</div><div class="al">${esc(m.line)}</div>${m.total ? `<div class="at">${esc(m.total)}</div>` : ''}</div></div>`;
+  if (!compact) for (const x of [...rest, ...def]) h += `<div class="actor sm">${pface(x, 'ph')}<div><span class="an">${esc(x.name)}</span> <span class="al">${esc(x.line)}</span>${x.total ? ` <span class="at">${esc(x.total)}</span>` : ''}</div></div>`;
+  else if (def[0]) h += `<div class="actor sm">${pface(def[0], 'ph')}<div><span class="al">${esc(def[0].line)}:</span> <span class="an">${esc(def[0].name)}</span>${def[0].total ? ` <span class="at">${esc(def[0].total)}</span>` : ''}</div></div>`;
+  return h;
+}
+const injuredHTML = (p) => (p.injured || []).map((x) => `<div class="actor sm injr ${x.returned ? 'back' : ''}">${pface(x, 'ph')}<div><span class="an">${esc(x.name)}</span> <span class="al">${x.returned ? '✅ back in the game' : '🚑 hurt on the play'}</span></div></div>`).join('');
+const playShort = (p) => (p?.who?.[0] ? `${p.who[0].name}: ${p.who[0].line}${p.defense?.[0] ? ` (${p.defense[0].line.toLowerCase()} by ${p.defense[0].name})` : ''}` : p?.text || '');
+const injShort = (p) => (p?.injured?.length ? p.injured.map((x) => `${x.name} (${x.team}) ${x.returned ? 'is back in the game' : 'got hurt'}`).join(' · ') : p?.text || '');
+const playRow = (p) => `<div class="play ${p.injured?.some((x) => !x.returned) ? 'inj' : p.scoring ? 'score' : ''} ${p.voided ? 'void' : ''}"><div class="t"><b>${esc(p.clock)}</b>${esc(p.periodLabel || (p.period ? 'Q' + p.period : ''))}</div><div class="pbody"><div class="ty">${esc(p.team)}${p.team && p.type ? ' · ' : ''}${esc(p.type)}${p.scoring && p.away !== null ? ` · ${p.away}-${p.home}` : ''}${p.voided ? ' · no play' : ''}</div>${actorsHTML(p)}${injuredHTML(p)}</div></div>`;
 
 // ---------- PAST GAMES / SEASONS ----------
 const viewSwitch = (on) => `<div class="seg" style="margin:4px 0 10px"><button data-view="today" aria-pressed="${on === 'today'}">Today &amp; upcoming</button><button data-view="season" aria-pressed="${on === 'season'}">Past games</button></div>`;
