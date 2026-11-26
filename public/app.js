@@ -704,20 +704,18 @@ function renderLineups(body, g, sum, tA, tH) {
 function renderPlays(body, g, sum) {
   const plays = sum?.plays || [];
   if (!plays.length) { body._plays = null; body.innerHTML = `<div class="empty">${g.state === 'pre' ? `Plays show up here once the game starts. Kickoff ${esc(fmtDay(g.date))} at ${esc(fmtTime(g.date))}.` : 'No plays yet.'}</div>`; return; }
-  if (body._plays !== g.id || !$('#fAll', body)) {
-    body.innerHTML = `
-      <div class="sec" id="sInj" hidden><h3>🚑 Injuries during the game</h3><div class="feed" id="fInj"></div></div>
-      <div class="sec" id="sScore" hidden><h3>Scoring plays</h3><div class="feed" id="fScore"></div></div>
-      <div class="sec"><div class="hd"><h3>Every play</h3><span class="est">newest first · new plays slide in live</span></div><div class="feed" id="fAll"></div></div>`;
-    body._plays = g.id;
-  }
   const inj = sum.liveInjuries || [];
-  const scoring = plays.filter((p) => p.scoring).slice(0, 12);
-  $('#sInj', body).hidden = !inj.length;
-  $('#sScore', body).hidden = !scoring.length;
-  syncFeed($('#fInj', body), inj, g);
-  syncFeed($('#fScore', body), scoring, g);
-  syncFeed($('#fAll', body), plays, g);
+  const scoring = plays.filter((p) => p.scoring);
+  const lists = { all: plays, score: scoring, inj };
+  if (!lists[S.playFilter]?.length && S.playFilter !== 'all') S.playFilter = 'all';
+  const f = S.playFilter || 'all';
+  const chips = `<div class="seg pf" id="pfilter">${[['all', g.state === 'in' ? '🔴 Live' : 'All', plays.length], ['score', 'Scoring', scoring.length], ['inj', 'Injuries', inj.length]].map(([k, l, n]) => `<button data-pf="${k}" aria-pressed="${f === k}" ${n ? '' : 'disabled'}>${l}${k !== 'all' ? ` <span class="count">${n}</span>` : ''}</button>`).join('')}</div>`;
+  if (body._plays !== `${g.id}:${f}` || !$('#fAll', body)) {
+    body.innerHTML = `<div class="sec"><div class="hd"><h3>${g.state === 'in' ? 'Live plays' : 'Plays'}</h3><span class="est">newest first${g.state === 'in' ? ' · new plays slide in' : ''}</span></div><div id="pfWrap"></div><div class="feed" id="fAll"></div></div>`;
+    body._plays = `${g.id}:${f}`;
+  }
+  setHTML($('#pfWrap', body), chips);
+  syncFeed($('#fAll', body), lists[f], g);
 }
 // Short play cards: photo of who made the play, what they did, who stopped them, totals after the play.
 const pface = (x, cls) => `<span class="${cls}">${x.headshot ? `<img src="${esc(x.headshot)}" alt="" loading="lazy" onerror="this.remove()">` : ''}<i>${esc(initials(x.name))}</i></span>`;
@@ -751,7 +749,7 @@ function playRow(p, g) {
   const meta = [score, `${esc(p.periodLabel || (p.period ? 'Q' + p.period : ''))} ${esc(p.clock)}`.trim(), esc(p.down || '')].filter(Boolean).join(' · ');
   const swing = p.swing ? `<span class="swing ${p.swing > 0 ? 'up' : 'dn'}" title="Win chance change">${p.swing > 0 ? '▲' : '▼'}${Math.abs(p.swing)}%</span>` : '';
   const photo = m || p.injured?.[0] || null;
-  const av = `<div class="fav">${photo ? pface(photo, 'ph') : `<span class="ph">${tm?.logo ? `<img src="${esc(tm.logo)}" alt="" style="object-fit:contain;padding:8px">` : ''}<i>${esc(p.team || '')}</i></span>`}${tm ? `<span class="tb" style="background:${esc(tm.color)}">${esc(tm.abbr)}</span>` : p.team ? `<span class="tb">${esc(p.team)}</span>` : ''}</div>`;
+  const av = `<div class="fav">${photo ? pface(photo, 'ph') : `<span class="ph">${tm?.logo ? `<img src="${esc(tm.logo)}" alt="" style="object-fit:contain;padding:8px" onerror="this.remove()">` : ''}<i>${esc(p.team || '')}</i></span>`}${tm ? `<span class="tb" style="background:${esc(tm.color)}">${esc(tm.abbr)}</span>` : p.team ? `<span class="tb">${esc(p.team)}</span>` : ''}</div>`;
   const head = m ? m.line : p.type || 'Play';
   const sub = [];
   if (m) sub.push(`<div class="fl1"><b>${esc(m.name)}</b>${m.total ? ` · ${esc(m.total)}` : ''}</div>`);
@@ -1270,6 +1268,7 @@ document.addEventListener('click', async (e) => {
   if (t.dataset.pseason) { $('#sheet')._season(t.dataset.pseason); return; }
   if (t.dataset.stat) { $('#sheet')._redraw((s) => { s.stat = t.dataset.stat; s.line = null; }); return; }
   if (t.dataset.line) { $('#sheet')._redraw((s) => { s.line = Math.max(0.5, s.line + Number(t.dataset.line)); }); return; }
+  if (t.dataset.pf) { S.playFilter = t.dataset.pf; renderGameBody(route()); return; }
   if (t.dataset.period) { S.period = t.dataset.period; drawBets(); return; }
   if (t.hasAttribute('data-ckgo')) { runCheck(); return; }
   if (t.hasAttribute('data-ckreset')) { CK.img = null; CK.res = null; CK.err = ''; drawCheck(); return; }

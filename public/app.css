@@ -407,3 +407,7 @@ input, select { font: inherit; font-size: 16px; padding: 9px 10px; border: 1px s
 .mini { position: relative; width: 28px; height: 28px; border-radius: 50%; overflow: hidden; background: var(--s3); display: inline-grid; place-items: center; flex: none; }
 .mini img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: top; }
 .mini i { font: 800 10px/1 var(--disp); font-style: normal; color: #fff9; }
+.seg.pf { margin: 4px 0 10px; }
+.seg.pf button:disabled { opacity: .4; }
+.seg.pf .count { font-size: 12px; background: var(--s2); color: var(--mute); padding: 2px 7px; border-radius: 99px; }
+.seg.pf button { white-space: nowrap; }
