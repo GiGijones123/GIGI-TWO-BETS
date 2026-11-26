@@ -491,3 +491,13 @@ input, select { font: inherit; font-size: 16px; padding: 9px 10px; border: 1px s
 .slipbet .appsel { grid-column: 1 / -1; }
 .slipbet select { font: inherit; font-weight: 800; color: var(--ink); background: var(--bg2); border: 1px solid var(--line); border-radius: 12px; padding: 8px 10px; }
 .grade.gwait { background: var(--s3); color: var(--mute); font-style: normal; }
+
+.lrow { grid-column: 2; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.lpct { font-size: 13px; font-weight: 800; color: var(--ink); }
+.betodds { margin-top: 12px; background: var(--bg2); border-radius: 16px; padding: 12px; display: grid; gap: 8px; }
+.betodds .hbtop { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.betodds .hbtop b { font: italic 900 40px/1 var(--disp); color: var(--ink); }
+.betodds .hbtop span { color: var(--mute); font-size: 14px; font-weight: 700; }
+.betodds .hbbar { height: 10px; border-radius: 99px; background: var(--s3); overflow: hidden; }
+.betodds .hbbar i { display: block; height: 100%; border-radius: 99px; transition: width .6s; }
+.lc { font-size: 13px; color: var(--mute); margin-top: 2px; } .lc b { color: var(--lime); }

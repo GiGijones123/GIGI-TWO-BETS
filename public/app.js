@@ -333,6 +333,8 @@ function render() {
 }
 function onData() {
   const r = route();
+  if (r.name === 'bets') for (const el of $$('[data-lc]')) { const b = S.bets.find((x) => x.id === el.dataset.lc); if (b) el.innerHTML = liveChanceText(b); }
+  const dlg = $('#sheet'); if (dlg?.open && dlg._bet) openBet(dlg._bet, true);
   if (r.name === 'games') { renderGamesBody(); warmSummaries(); }
   else if (r.name === 'game') renderGameLive(r);
 }
@@ -909,6 +911,7 @@ function propStats(league, pos) {
 
 async function openPlayer(league, id) {
   const dlg = $('#sheet');
+  dlg._bet = null;
   dlg.innerHTML = `<div class="sheet"><div class="grab"><button data-close>Close</button></div><div class="skel" style="height:300px"></div></div>`;
   if (!dlg.open) dlg.showModal();
   let p = S.players[`${league}:${id}`];
@@ -1157,7 +1160,7 @@ function drawBets() {
     ${S.betsMode === 'cloud' && localCount ? `<button style="margin-top:8px" data-migrate>Move ${localCount} bets from this phone to the cloud</button>` : ''}
     <h2>Your bets <span class="count">${S.bets.length}</span></h2>
     <div style="display:grid;gap:8px">${S.bets.length ? S.bets.slice().sort((a, b) => String(b.date).localeCompare(String(a.date))).map((b) => `
-      <div class="betrow"><div><button class="ds dsbtn" data-openbet="${esc(b.id)}">${esc(b.desc)} <span class="open">›</span></button><div class="mt">${esc(b.date)} · ${esc(b.app)} · ${esc(b.sport)} · ${b.odds ? esc(ml(Number(b.odds))) + ' · ' : ''}$${esc(b.stake)}</div>
+      <div class="betrow"><div><button class="ds dsbtn" data-openbet="${esc(b.id)}">${esc(b.desc)} <span class="open">›</span></button>${b.status === 'pending' ? `<div class="lc" data-lc="${esc(b.id)}">${liveChanceText(b)}</div>` : ''}<div class="mt">${esc(b.date)} · ${esc(b.app)} · ${esc(b.sport)} · ${b.odds ? esc(ml(Number(b.odds))) + ' · ' : ''}$${esc(b.stake)}</div>
         <div style="display:flex;gap:6px;margin-top:6px"><select data-status="${esc(b.id)}" aria-label="Result">${['pending', 'won', 'lost', 'push', 'cashout'].map((s) => `<option value="${s}" ${b.status === s ? 'selected' : ''}>${s === 'cashout' ? 'Cashed out' : s[0].toUpperCase() + s.slice(1)}</option>`).join('')}</select><button class="ghost" style="min-height:36px;padding:4px 8px" data-del="${esc(b.id)}">Delete</button></div></div>
         <div class="pl ${profit(b) > 0 ? 'pos' : profit(b) < 0 ? 'neg' : ''}">${b.status === 'pending' ? '<span class="tag">Pending</span>' : money(profit(b))}</div></div>`).join('') : '<div class="empty">No bets yet. Add your first one above.</div>'}</div>`;
 }
@@ -1455,6 +1458,7 @@ function drawGuide() {
 
 // ---------- open one bet ----------
 const SPORT_KEY_UI = { NFL: 'nfl', NBA: 'nba', 'College FB': 'cfb', NHL: 'nhl' };
+function liveChanceText(b) { const bc = betChance(b); return bc ? `${bc.live ? '🔴 Live' : 'Before kickoff'}: <b>${pctTxt(bc.p)}</b> to hit` : ''; }
 function betLegs(b) {
   if (Array.isArray(b.legs) && b.legs.length) return b.legs;
   // older bets: split the description
@@ -1467,13 +1471,75 @@ function findLegGame(leg) {
   return S.games.find((g) => [g.home, g.away].some((tm) => [tm.abbr, tm.name].some((n) => n && new RegExp(`\\b${n.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`).test(t)))) || null;
 }
 // Is this leg winning, losing or done? Works for sides and totals from the live score.
+// Chance a leg hits right now, from the score and the time left. Before kickoff it's the pick's estimate.
+const SD = { nfl: [13.5, 13], cfb: [16, 16], nba: [12, 18], nhl: [2, 2.2] };
+function normCdf(z) { const t = 1 / (1 + 0.2316419 * Math.abs(z)); const d = 0.3989423 * Math.exp(-z * z / 2); const p = d * t * (0.3193815 + t * (-0.3565638 + t * (1.781478 + t * (-1.821256 + t * 1.330274)))); return z > 0 ? 1 - p : p; }
+function timeLeft(g) {
+  const L = { nfl: [4, 15], cfb: [4, 15], nba: [4, 12], nhl: [3, 20] }[g.league] || [4, 15];
+  if (g.state === 'pre') return 1;
+  if (g.state === 'post') return 0;
+  const [mm, ss] = String(g.clock || '0:00').split(':').map(Number);
+  const inPer = (mm || 0) + (ss || 0) / 60;
+  const per = g.period || 1;
+  if (per > L[0]) return Math.max(0.01, inPer / (L[0] * L[1]));
+  return Math.max(0, ((L[0] - per) * L[1] + inPer) / (L[0] * L[1]));
+}
+function legChance(leg, g) {
+  const pre = leg.est ? leg.est / 100 : null;
+  if (!g) return pre;
+  if (g.state === 'pre') return pre;
+  const a = Number(g.away.score) || 0; const h = Number(g.home.score) || 0;
+  const f = timeLeft(g);
+  const [sdM, sdT] = SD[g.league] || SD.nfl;
+  const tot = /^(over|under)\s+(\d+(\.\d+)?)/i.exec(leg.pick);
+  if (tot) {
+    const line = parseFloat(tot[2]); const sum = a + h;
+    const over = /over/i.test(tot[1]);
+    if (f <= 0) return sum === line ? 0.5 : (over ? sum > line : sum < line) ? 1 : 0;
+    const full = g.odds?.overUnder || line;
+    const mu = sum + full * f;
+    const pOver = normCdf((mu - line) / (sdT * Math.sqrt(f)));
+    return clamp(over ? pOver : 1 - pOver, 0.01, 0.99);
+  }
+  const sp = /^(.+?)\s+([+-]\d+(\.\d+)?|ML|moneyline)$/i.exec(String(leg.pick).trim());
+  if (sp) {
+    const nm = sp[1].toLowerCase();
+    const isHome = [g.home.abbr, g.home.name, g.home.full].some((x) => x && x.toLowerCase() === nm);
+    const isAway = [g.away.abbr, g.away.name, g.away.full].some((x) => x && x.toLowerCase() === nm);
+    if (isHome || isAway) {
+      const line = /^[+-]/.test(sp[2]) ? parseFloat(sp[2]) : 0;
+      const cur = isHome ? h - a : a - h;
+      if (f <= 0) return cur + line === 0 ? 0.5 : cur + line > 0 ? 1 : 0;
+      const hs = homeSpread(g, g.odds);
+      const exp = hs === null ? -line : isHome ? -hs : hs; // expected full-game margin for this team
+      const mu = cur + exp * f + line;
+      return clamp(normCdf(mu / (sdM * Math.sqrt(f))), 0.01, 0.99);
+    }
+  }
+  return pre;
+}
+const pctTxt = (p) => (p === null || p === undefined ? '' : p >= 0.995 ? '100%' : p <= 0.005 ? '0%' : `${Math.round(p * 100)}%`);
+// Whole bet: every leg must hit.
+function betChance(b) {
+  const legs = betLegs(b);
+  let p = 1; let live = false; let known = true;
+  for (const l of legs) { const g = findLegGame(l); const c = legChance(l, g); if (c === null) { known = false; continue; } if (g && g.state !== 'pre') live = true; p *= c; }
+  return known || p < 1 ? { p, live, partial: !known } : null;
+}
+
 function legStatus(leg, g) {
   if (!g || g.state === 'pre') return g ? { cls: 'wait', text: `Starts ${fmtDay(g.date)} ${fmtTime(g.date)}` } : null;
   const a = Number(g.away.score) || 0; const h = Number(g.home.score) || 0;
   const done = g.state === 'post';
   const word = (ok, push) => (push ? { cls: 'push', text: done ? 'Push' : 'Tied with the line' } : ok ? { cls: 'win', text: done ? 'Won ✓' : 'Winning right now' } : { cls: 'lose', text: done ? 'Lost ✕' : 'Losing right now' });
   const tot = /^(over|under)\s+(\d+(\.\d+)?)/i.exec(leg.pick);
-  if (tot) { const line = parseFloat(tot[2]); const sum = a + h; return { ...word(/over/i.test(tot[1]) ? sum > line : sum < line, sum === line), score: `${sum} points so far` }; }
+  if (tot) {
+    const line = parseFloat(tot[2]); const sum = a + h; const over = /over/i.test(tot[1]);
+    if (done) return word(over ? sum > line : sum < line, sum === line);
+    const need = Math.floor(line - sum) + 1; // points still needed to go over
+    if (over) return sum > line ? { cls: 'win', text: 'Already over ✓' } : { cls: 'wait', text: `Needs ${need} more point${need === 1 ? '' : 's'}` };
+    return sum > line ? { cls: 'lose', text: 'Already over the line ✕' } : { cls: 'wait', text: `${need - 1} point${need - 1 === 1 ? '' : 's'} of room left` };
+  }
   const sp = /^(.+?)\s+([+-]\d+(\.\d+)?|ML|moneyline)$/i.exec(String(leg.pick).trim());
   if (sp) {
     const nm = sp[1].toLowerCase();
@@ -1519,6 +1585,7 @@ function openBet(id, again = false) {
   if (!again) fillLegs(b).then((ok) => { if (ok && $('#sheet').open && $('#sheet')._bet === id) openBet(id, true); });
   const legs = betLegs(b);
   const dlg = $('#sheet');
+  const keep = $('.sheet', dlg)?.scrollTop || 0;
   const rows = legs.map((l) => {
     const g = findLegGame(l);
     const st = legStatus(l, g);
@@ -1528,17 +1595,19 @@ function openBet(id, again = false) {
       ${gr ? `<span class="grade g${esc(gr)}">${esc(gr)}</span>` : l.call ? `<span class="call ${esc(l.call)}">${esc(l.call.toUpperCase())}</span>` : (l.tried ? '<span class="grade gwait">–</span>' : '<span class="grade gwait">…</span>')}
       <div><b>${esc(l.pick)}</b><small>${esc([l.game || (g ? `${g.away.abbr} @ ${g.home.abbr}` : ''), l.est ? `${l.est}% estimated` : '', l.odds ? ml(Number(l.odds)) : ''].filter(Boolean).join(' · '))}</small>
       ${score ? `<small class="sc">${esc(score)}</small>` : ''}${l.why ? `<small>${esc(l.why)}</small>` : ''}</div>
-      ${st ? `<span class="lst ${st.cls}">${esc(st.text)}</span>` : ''}
+      ${st || legChance(l, g) !== null ? `<div class="lrow">${st ? `<span class="lst ${st.cls}">${esc(st.text)}</span>` : ''}${legChance(l, g) !== null && !(g && g.state === 'post') ? `<span class="lpct">${pctTxt(legChance(l, g))} to hit</span>` : ''}</div>` : ''}
       ${g ? `<button class="ghost golink" data-go="${esc(g.league)}/${esc(g.id)}">Game ›</button>` : ''}
     </div>`;
   }).join('');
   const pay = b.payout || (b.odds ? Math.round(b.stake * decOdds(b.odds) * 100) / 100 : null);
   dlg.innerHTML = `<div class="sheet"><div class="grab"><button data-close>Close</button></div>
     <div class="obhead">${b.grade ? `<span class="grade big g${esc(b.grade)}">${esc(b.grade)}</span>` : ''}<div><h3>${legs.length > 1 ? `${legs.length}-leg parlay` : 'Straight bet'}</h3><div class="est">${esc(b.date)} · ${esc(b.app)} · ${b.odds ? esc(ml(Number(b.odds))) + ' · ' : ''}$${esc(b.stake)} to pay ${pay ? usd(pay) : '?'}</div></div><span class="tag ${b.status === 'won' ? 't-ok' : b.status === 'lost' ? 't-out' : ''}">${esc(b.status === 'cashout' ? 'Cashed out' : b.status[0].toUpperCase() + b.status.slice(1))}</span></div>
+    ${(() => { const bc = betChance(b); if (!bc || b.status !== 'pending') return ''; const pc = Math.round(bc.p * 100); return `<div class="betodds"><div class="hbtop"><b>${pctTxt(bc.p)}</b><span>${legs.length > 1 ? 'chance the parlay hits' : 'chance this hits'}${bc.live ? ' · live' : ' · before kickoff'}${bc.partial ? ' · props not counted' : ''}</span></div><div class="hbbar"><i style="width:${pc}%;background:${pc >= 60 ? 'var(--win)' : pc >= 35 ? 'var(--warn)' : 'var(--loss)'}"></i></div></div>`; })()}
     <h2 style="margin-top:14px">Your picks <span class="count">${legs.length}</span></h2>
     <div class="oblegs">${rows}</div>
     <p class="est" style="margin-top:12px">Winning or losing is worked out from the live score for sides and totals. Player props: check the player's card.</p></div>`;
   dlg._bet = id;
+  if (again && keep) $('.sheet', dlg).scrollTop = keep;
   if (!dlg.open) dlg.showModal();
 }
 
@@ -1577,7 +1646,7 @@ document.addEventListener('click', async (e) => {
   if (t.dataset.side) { S.side = t.dataset.side; renderGameBody(route()); return; }
   if (t.dataset.unit) { S.unit = t.dataset.unit; renderGameBody(route()); return; }
   if (t.dataset.player) { const [lg, id] = t.dataset.player.split(':'); if (id) openPlayer(lg, id); return; }
-  if (t.hasAttribute('data-close')) { $('#sheet').close(); return; }
+  if (t.hasAttribute('data-close')) { $('#sheet').close(); $('#sheet')._bet = null; return; }
   if (t.dataset.view) { location.hash = t.dataset.view === 'season' ? '#/season' : '#/'; return; }
   if (t.dataset.sleague) { S.sLeague = t.dataset.sleague; store.set('sLeague', S.sLeague); S.sSeason = null; S.sSel = null; renderSeason(); return; }
   if (t.dataset.week) { const [type, week] = t.dataset.week.split(':'); S.sSel = { type, week }; renderSeason(); return; }
@@ -1658,6 +1727,7 @@ document.addEventListener('submit', async (e) => {
   drawBets();
 });
 $('#sheet').addEventListener('click', (e) => { if (e.target.id === 'sheet') $('#sheet').close(); });
+$('#sheet').addEventListener('close', () => { $('#sheet')._bet = null; });
 
 // countdown ticker (every second)
 setInterval(() => { for (const el of $$('[data-cd]')) el.textContent = countdown(el.dataset.cd); }, 1000);
