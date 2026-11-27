@@ -670,3 +670,4 @@ body.wl-open { overflow: hidden; }
 .wpsvg .wsc { fill: var(--lime); }
 .wpdot { position: absolute; width: 14px; height: 14px; margin: -7px 0 0 -7px; border-radius: 50%; background: var(--lime); box-shadow: 0 0 0 4px #c8ff4d33; pointer-events: none; transition: left .08s linear, top .08s linear; }
 .wpteams { display: flex; justify-content: space-between; font-size: 12px; font-weight: 800; margin-top: 4px; }
+.btnlink { display: inline-grid; place-items: center; min-height: 36px; padding: 4px 14px; border-radius: 99px; background: var(--lime); color: #0a0d14; font-weight: 800; text-decoration: none; }

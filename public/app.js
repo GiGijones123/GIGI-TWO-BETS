@@ -408,6 +408,7 @@ function onData() {
 function renderGames() {
   const v = $('#view');
   v.innerHTML = `
+    ${moveBanner()}
     ${viewSwitch('today')}
     <div id="myOpen"></div>
     <div id="tickerWrap"></div>
@@ -2164,12 +2165,15 @@ function wpMount(g, line) {
 // ---------- MOVING TO THE NEW ADDRESS ----------
 // Bets saved on a phone belong to the web address. The old address sends them over in the link.
 const NEW_HOST = 'gigipicks.vercel.app';
-function moveFromOldAddress() {
-  if (location.hostname !== 'my-gigipicks.vercel.app') return false;
+function moveLink() {
   const bets = store.get('bets', []);
   const extra = { bankroll: store.get('bankroll', 0), risk: store.get('risk', ''), slip: store.get('slip', []) };
-  location.replace(`https://${NEW_HOST}/${bets.length || extra.bankroll ? `#/import/${b64url(JSON.stringify({ bets, ...extra }))}` : ''}`);
-  return true;
+  return `https://${NEW_HOST}/${bets.length || extra.bankroll ? `#/import/${b64url(JSON.stringify({ bets, ...extra }))}` : ''}`;
+}
+// On the old address: a banner with a button, instead of jumping automatically.
+function moveBanner() {
+  if (location.hostname !== 'my-gigipicks.vercel.app') return '';
+  return `<div class="homebn"><span>📦</span><div><b>GIGI Picks has a new link</b><small>Tap to move your bets to ${NEW_HOST}.</small></div><a class="pri btnlink" href="${esc(moveLink())}">Move</a></div>`;
 }
 function importBets(code) {
   let j = null;
@@ -2202,7 +2206,6 @@ function homeBanner() {
 
 window.addEventListener('hashchange', render);
 (async () => {
-  if (moveFromOldAddress()) return;
   render();
   swReg();
   Bets.load().then(() => { if (route().name === 'games') renderGamesBody(); fillAllOpen(); }).catch((e) => console.warn('open bets strip', e));
