@@ -373,6 +373,7 @@ function route() {
   if (a === 'builder') return { name: 'builder' };
   if (a === 'season') return { name: 'season' };
   if (a === 'share' && b) return { name: 'share', code: b };
+  if (a === 'import' && b) return { name: 'import', code: b };
   return { name: 'games' };
 }
 function setTab(name) {
@@ -391,6 +392,7 @@ function render() {
   else if (r.name === 'guide') renderGuide();
   else if (r.name === 'builder') renderBuilder();
   else if (r.name === 'share') renderShare(r);
+  else if (r.name === 'import') { importBets(r.code); return; }
   else renderNews();
   const v = $('#view'); v.classList.remove('enter'); void v.offsetWidth; v.classList.add('enter');
 }
@@ -2159,6 +2161,32 @@ function wpMount(g, line) {
   if (touching) box._touch = true;
 }
 
+// ---------- MOVING TO THE NEW ADDRESS ----------
+// Bets saved on a phone belong to the web address. The old address sends them over in the link.
+const NEW_HOST = 'gigipicks.vercel.app';
+function moveFromOldAddress() {
+  if (location.hostname !== 'my-gigipicks.vercel.app') return false;
+  const bets = store.get('bets', []);
+  const extra = { bankroll: store.get('bankroll', 0), risk: store.get('risk', ''), slip: store.get('slip', []) };
+  location.replace(`https://${NEW_HOST}/${bets.length || extra.bankroll ? `#/import/${b64url(JSON.stringify({ bets, ...extra }))}` : ''}`);
+  return true;
+}
+function importBets(code) {
+  let j = null;
+  try { j = JSON.parse(unb64url(code)); } catch {}
+  const have = store.get('bets', []);
+  const ids = new Set(have.map((b) => b.id));
+  const add = (j?.bets || []).filter((b) => b && b.id && !ids.has(b.id));
+  if (add.length) store.set('bets', [...add, ...have]);
+  if (j?.bankroll && !store.get('bankroll', 0)) store.set('bankroll', j.bankroll);
+  if (j?.risk && !store.get('risk', '')) store.set('risk', j.risk);
+  if (j?.slip?.length && !store.get('slip', []).length) store.set('slip', j.slip);
+  history.replaceState(null, '', '#/bets');
+  render();
+  Bets.load().then(() => { if (route().name === 'bets') drawBets(); });
+  setTimeout(() => toast(add.length ? `Moved ${add.length} bet${add.length === 1 ? '' : 's'} over ✓` : 'Your bets are already here ✓'), 400);
+}
+
 // ---------- LITTLE THINGS ----------
 function toast(msg) {
   let t = $('#toast');
@@ -2174,6 +2202,7 @@ function homeBanner() {
 
 window.addEventListener('hashchange', render);
 (async () => {
+  if (moveFromOldAddress()) return;
   render();
   swReg();
   Bets.load().then(() => { if (route().name === 'games') renderGamesBody(); fillAllOpen(); }).catch((e) => console.warn('open bets strip', e));
