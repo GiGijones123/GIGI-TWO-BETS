@@ -408,7 +408,6 @@ function onData() {
 function renderGames() {
   const v = $('#view');
   v.innerHTML = `
-    ${moveBanner()}
     ${viewSwitch('today')}
     <div id="myOpen"></div>
     <div id="tickerWrap"></div>
